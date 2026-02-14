@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nagini Script Decryption Example</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #4a9eff;
+            margin-bottom: 10px;
+        }
+
+        h2 {
+            color: #4a9eff;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+        }
+
+        .description {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border-left: 4px solid #4a9eff;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #b0b0b0;
+            font-weight: 500;
+        }
+
+        input[type="password"],
+        textarea {
+            width: 100%;
+            padding: 10px;
+            background: #2a2a2a;
+            border: 1px solid #4a4a4a;
+            color: #e0e0e0;
+            border-radius: 4px;
+            font-size: 0.95rem;
+            font-family: inherit;
+        }
+
+        textarea {
+            font-family: "Courier New", monospace;
+            font-size: 0.85rem;
+            resize: vertical;
+            min-height: 150px;
+        }
+
+        textarea:focus,
+        input:focus {
+            outline: none;
+            border-color: #4a9eff;
+        }
+
+        .btn {
+            background: #4a9eff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background: #3a8eef;
+        }
+
+        .btn:disabled {
+            background: #3a3a3a;
+            cursor: not-allowed;
+            color: #666;
+        }
+
+        .result {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+            border: 1px solid #4a4a4a;
+        }
+
+        .error {
+            background: rgba(244, 67, 54, 0.1);
+            border: 1px solid #f44336;
+            color: #f44336;
+            padding: 12px;
+            border-radius: 4px;
+            margin-top: 15px;
+        }
+
+        .success {
+            background: rgba(76, 175, 80, 0.1);
+            border: 1px solid #4caf50;
+            color: #4caf50;
+            padding: 12px;
+            border-radius: 4px;
+            margin-top: 15px;
+        }
+
+        pre {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin-top: 10px;
+            border: 1px solid #3a3a3a;
+        }
+
+        code {
+            color: #4a9eff;
+            font-family: "Courier New", monospace;
+            font-size: 0.9rem;
+        }
+
+        .info-box {
+            background: rgba(74, 158, 255, 0.1);
+            border: 1px solid #4a9eff;
+            padding: 12px;
+            border-radius: 4px;
+            margin: 15px 0;
+            font-size: 0.9rem;
+        }
+
+        .warning-box {
+            background: rgba(255, 152, 0, 0.1);
+            border: 1px solid #ff9800;
+            padding: 12px;
+            border-radius: 4px;
+            margin: 15px 0;
+            font-size: 0.9rem;
+            color: #ffb74d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔓 Nagini Script Decryption</h1>
+        <p class="description">
+            This page demonstrates how to decrypt and view scripts that were encrypted with AES-256-GCM before publishing.
+            Enter the encrypted content and your passphrase to decrypt the script.
+        </p>
+
+        <div class="warning-box">
+            <strong>⚠️ Security Notice:</strong> This is a client-side decryption tool. Your passphrase never leaves your browser.
+            The decryption happens entirely on your machine using the Web Crypto API.
+        </div>
+
+        <h2>Decrypt Encrypted Script</h2>
+
+        <div class="form-group">
+            <label for="encryptedContent">Encrypted Content (Base64):</label>
+            <textarea
+                id="encryptedContent"
+                placeholder="Paste the encrypted base64 content here..."
+                rows="6"
+            ></textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="passphrase">Decryption Passphrase:</label>
+            <input
+                type="password"
+                id="passphrase"
+                placeholder="Enter your passphrase"
+                autocomplete="off"
+            />
+        </div>
+
+        <button class="btn" onclick="decryptContent()">
+            🔓 Decrypt
+        </button>
+
+        <div id="result"></div>
+
+        <h2>Usage Instructions</h2>
+
+        <div class="info-box">
+            <strong>How to use this decryption tool:</strong>
+            <ol style="margin-left: 20px; margin-top: 10px;">
+                <li>Copy the encrypted base64 content from the published script</li>
+                <li>Paste it into the "Encrypted Content" field above</li>
+                <li>Enter the same passphrase you used when encrypting</li>
+                <li>Click "Decrypt" to view the original script content</li>
+            </ol>
+        </div>
+
+        <h2>Command-Line Decryption Example</h2>
+
+        <p style="margin-bottom: 10px;">
+            If you need to decrypt and execute a script from the command line, you can use this approach:
+        </p>
+
+        <pre><code># Download and decrypt a script with curl and openssl
+# Note: This requires the encryption metadata (salt, IV) to be extracted
+
+# For a simpler approach, fetch the encrypted content and decrypt in Node.js
+curl -s http://localhost:5001/SHORTID | node decrypt.js</code></pre>
+
+        <h2>Node.js Decryption Script</h2>
+
+        <p style="margin-bottom: 10px;">
+            Here's a Node.js script example for decrypting Nagini scripts:
+        </p>
+
+        <pre><code>const crypto = require('crypto');
+
+// Encrypted base64 content from Nagini
+const encryptedBase64 = process.argv[2] || '';
+const passphrase = process.argv[3] || '';
+
+function decrypt(encryptedBase64, passphrase) {
+    // Decode from base64
+    const combined = Buffer.from(encryptedBase64, 'base64');
+
+    // Extract salt (first 16 bytes)
+    const salt = combined.slice(0, 16);
+
+    // Extract IV (next 12 bytes)
+    const iv = combined.slice(16, 28);
+
+    // Extract encrypted data (remaining bytes)
+    const encryptedData = combined.slice(28);
+
+    // Derive key using PBKDF2
+    const key = crypto.pbkdf2Sync(passphrase, salt, 100000, 32, 'sha256');
+
+    // Decrypt using AES-256-GCM
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+
+    // Extract auth tag (last 16 bytes)
+    const authTag = encryptedData.slice(-16);
+    const ciphertext = encryptedData.slice(0, -16);
+
+    decipher.setAuthTag(authTag);
+
+    let decrypted = decipher.update(ciphertext, null, 'utf8');
+    decrypted += decipher.final('utf8');
+
+    return decrypted;
+}
+
+try {
+    const decrypted = decrypt(encryptedBase64, passphrase);
+    console.log(decrypted);
+} catch (error) {
+    console.error('Decryption failed:', error.message);
+    process.exit(1);
+}</code></pre>
+
+        <h2>Bash One-Liner Example</h2>
+
+        <pre><code># Decrypt and execute (use with caution!)
+curl -s http://localhost:5001/SHORTID | \
+  node -e "/* paste Node.js decrypt code here */" - "YOUR_PASSPHRASE" | \
+  bash</code></pre>
+
+        <div class="warning-box">
+            <strong>⚠️ Security Warning:</strong> Only decrypt and execute scripts from trusted sources.
+            Always review the decrypted content before execution. Encryption protects confidentiality,
+            not integrity or authenticity.
+        </div>
+    </div>
+
+    <script src="/static/crypto.js"></script>
+    <script>
+        async function decryptContent() {
+            const encryptedContent = document.getElementById('encryptedContent').value.trim();
+            const passphrase = document.getElementById('passphrase').value;
+            const resultDiv = document.getElementById('result');
+
+            // Clear previous result
+            resultDiv.innerHTML = '';
+
+            // Validate inputs
+            if (!encryptedContent) {
+                resultDiv.innerHTML = '<div class="error">Please enter encrypted content</div>';
+                return;
+            }
+
+            if (!passphrase) {
+                resultDiv.innerHTML = '<div class="error">Please enter a passphrase</div>';
+                return;
+            }
+
+            try {
+                // Decrypt the content
+                const decrypted = await NaginiCrypto.decrypt(encryptedContent, passphrase);
+
+                // Display success and decrypted content
+                resultDiv.innerHTML = `
+                    <div class="success">✅ Decryption successful!</div>
+                    <div class="result">
+                        <h3 style="color: #4a9eff; margin-bottom: 10px;">Decrypted Script Content:</h3>
+                        <pre><code>${escapeHtml(decrypted)}</code></pre>
+                    </div>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <strong>❌ Decryption failed:</strong><br>
+                        ${escapeHtml(error.message)}
+                        <br><br>
+                        <small>Make sure you're using the correct passphrase and the content is a valid encrypted Nagini script.</small>
+                    </div>
+                `;
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Allow Enter key in passphrase field
+        document.getElementById('passphrase').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                decryptContent();
+            }
+        });
+    </script>
+</body>
+</html>

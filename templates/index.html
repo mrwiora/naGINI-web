@@ -1,0 +1,2911 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>naGINI Web - Visual Script Composer</title>
+
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            body {
+                font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                background: #1a1a1a;
+                color: #e0e0e0;
+                overflow: hidden;
+                height: 100vh;
+            }
+
+            #app {
+                display: flex;
+                height: 100vh;
+                flex-direction: column;
+            }
+
+            /* Header */
+            .header {
+                background: #2a2a2a;
+                padding: 10px 20px;
+                border-bottom: 2px solid #3a3a3a;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                z-index: 1000;
+            }
+
+            .header h1 {
+                font-size: 1.5rem;
+                color: #4a9eff;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+
+            .header-actions {
+                display: flex;
+                gap: 10px;
+            }
+
+            .btn {
+                background: #3a3a3a;
+                color: #e0e0e0;
+                border: 1px solid #4a4a4a;
+                padding: 8px 16px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 0.9rem;
+                transition: all 0.2s;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+
+            .btn:hover {
+                background: #4a4a4a;
+                border-color: #5a5a5a;
+            }
+
+            .btn.primary {
+                background: #4a9eff;
+                border-color: #4a9eff;
+                color: white;
+            }
+
+            .btn.primary:hover {
+                background: #3a8eef;
+            }
+
+            .btn.success {
+                background: #4caf50;
+                border-color: #4caf50;
+                color: white;
+            }
+
+            .btn.success:hover {
+                background: #45a049;
+            }
+
+            .btn u {
+                text-decoration: underline;
+                letter-spacing: normal;
+                word-spacing: normal;
+            }
+
+            /* Main content area */
+            .main-content {
+                display: flex;
+                flex: 1;
+                overflow: hidden;
+            }
+
+            /* Sidebar */
+            .sidebar {
+                width: 280px;
+                background: #2a2a2a;
+                border-right: 2px solid #3a3a3a;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
+
+            .sidebar-header {
+                padding: 15px;
+                background: #333;
+                border-bottom: 1px solid #3a3a3a;
+                font-weight: bold;
+                color: #4a9eff;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+
+            .blocks-list {
+                flex: 1;
+                overflow-y: auto;
+                padding: 10px;
+            }
+
+            .block-item {
+                background: #3a3a3a;
+                padding: 12px;
+                margin-bottom: 8px;
+                border-radius: 4px;
+                cursor: grab;
+                border: 1px solid #4a4a4a;
+                transition: all 0.2s;
+                position: relative;
+            }
+
+            .block-item:hover {
+                background: #4a4a4a;
+                border-color: #4a9eff;
+            }
+
+            .block-item:active {
+                cursor: grabbing;
+            }
+
+            .block-item-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 4px;
+            }
+
+            .block-name {
+                font-weight: 500;
+                color: #4a9eff;
+                flex: 1;
+            }
+
+            .block-edit-icon {
+                color: #999;
+                cursor: pointer;
+                padding: 4px 8px;
+                border-radius: 3px;
+                transition: all 0.2s;
+                font-size: 0.9rem;
+                opacity: 0;
+            }
+
+            .block-item:hover .block-edit-icon {
+                opacity: 1;
+            }
+
+            .block-edit-icon:hover {
+                color: #4a9eff;
+                background: rgba(74, 158, 255, 0.1);
+            }
+
+            .block-info {
+                font-size: 0.8rem;
+                color: #999;
+            }
+
+            /* Canvas area */
+            .canvas-container {
+                flex: 1;
+                position: relative;
+                background: #1a1a1a;
+                background-image:
+                    linear-gradient(
+                        rgba(255, 255, 255, 0.05) 1px,
+                        transparent 1px
+                    ),
+                    linear-gradient(
+                        90deg,
+                        rgba(255, 255, 255, 0.05) 1px,
+                        transparent 1px
+                    );
+                background-size: 20px 20px;
+                overflow: auto;
+            }
+
+            #canvas {
+                min-width: 100%;
+                min-height: 100%;
+                position: relative;
+            }
+
+            /* Node styles */
+            .script-node {
+                background: #2a2a2a;
+                border: 2px solid #4a9eff;
+                border-radius: 6px;
+                padding: 0;
+                min-width: 200px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            }
+
+            .script-node.inactive {
+                border-color: #666;
+                opacity: 0.6;
+            }
+
+            .script-node.selected {
+                border-color: #ffd700;
+                box-shadow:
+                    0 0 15px rgba(255, 215, 0, 0.5),
+                    0 4px 6px rgba(0, 0, 0, 0.3);
+            }
+
+            .script-node.selected .node-header {
+                background: #ffa500;
+            }
+
+            .node-header {
+                background: #4a9eff;
+                color: white;
+                padding: 10px;
+                font-weight: bold;
+                border-radius: 4px 4px 0 0;
+                cursor: move;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+
+            .script-node.inactive .node-header {
+                background: #666;
+            }
+
+            .node-body {
+                padding: 10px;
+            }
+
+            .node-remove {
+                background: rgba(255, 255, 255, 0.2);
+                border: none;
+                color: white;
+                width: 20px;
+                height: 20px;
+                border-radius: 50%;
+                cursor: pointer;
+                font-size: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .node-remove:hover {
+                background: rgba(255, 0, 0, 0.8);
+            }
+
+            .connection-point {
+                width: 12px;
+                height: 12px;
+                background: #4a9eff;
+                border: 2px solid #e0e0e0;
+                border-radius: 50%;
+                position: absolute;
+                cursor: pointer;
+            }
+
+            .connection-point.input {
+                left: -6px;
+                top: 50%;
+                transform: translateY(-50%);
+            }
+
+            .connection-point.output {
+                right: -6px;
+                top: 50%;
+                transform: translateY(-50%);
+            }
+
+            .connection-line {
+                stroke: #4a9eff;
+                stroke-width: 2;
+                fill: none;
+                pointer-events: none;
+            }
+
+            /* Modal */
+            .modal {
+                display: none;
+                position: fixed;
+                z-index: 2000;
+                left: 0;
+                top: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.7);
+            }
+
+            .modal.active {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+
+            .modal-content {
+                background: #2a2a2a;
+                padding: 20px;
+                border-radius: 8px;
+                min-width: 400px;
+                max-width: 600px;
+                border: 2px solid #4a4a4a;
+            }
+
+            .modal-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 20px;
+                padding-bottom: 10px;
+                border-bottom: 1px solid #3a3a3a;
+            }
+
+            .modal-header h2 {
+                color: #4a9eff;
+            }
+
+            .modal-close {
+                background: none;
+                border: none;
+                color: #e0e0e0;
+                font-size: 1.5rem;
+                cursor: pointer;
+            }
+
+            .modal-body {
+                margin-bottom: 20px;
+            }
+
+            .save-error-message {
+                display: none;
+                margin-top: 15px;
+                padding: 15px;
+                background: rgba(244, 67, 54, 0.1);
+                border: 1px solid #f44336;
+                border-radius: 4px;
+            }
+
+            .save-error-message.visible {
+                display: block;
+            }
+
+            .save-error-title {
+                color: #f44336;
+                font-weight: bold;
+                margin-bottom: 10px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .save-error-info {
+                color: #e0e0e0;
+                font-size: 0.9rem;
+                margin-top: 8px;
+            }
+
+            .save-success-message {
+                display: none;
+                margin-top: 15px;
+                padding: 15px;
+                background: rgba(76, 175, 80, 0.1);
+                border: 1px solid #4caf50;
+                border-radius: 4px;
+            }
+
+            .save-success-message.visible {
+                display: block;
+            }
+
+            .save-success-title {
+                color: #4caf50;
+                font-weight: bold;
+                margin-bottom: 10px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .save-success-info {
+                color: #999;
+                font-size: 0.85rem;
+                margin-top: 8px;
+                font-style: italic;
+            }
+
+            .form-group {
+                margin-bottom: 15px;
+            }
+
+            /* Edit Block Modal - larger size */
+            #editBlockModal .modal-content {
+                width: 80vw;
+                height: 80vh;
+                max-width: none;
+                max-height: none;
+                display: flex;
+                flex-direction: column;
+            }
+
+            #editBlockModal .modal-header {
+                flex-shrink: 0;
+            }
+
+            #editBlockModal .modal-body {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+                min-height: 0;
+                margin-bottom: 20px;
+            }
+
+            #editBlockModal .modal-footer {
+                flex-shrink: 0;
+            }
+
+            #editBlockModal .form-group {
+                display: flex;
+                flex-direction: column;
+                margin-bottom: 15px;
+            }
+
+            #editBlockModal .form-group:first-child {
+                flex-shrink: 0;
+            }
+
+            #editBlockModal .form-group:nth-child(2) {
+                flex: 1;
+                min-height: 0;
+                margin-bottom: 0;
+                display: flex;
+                flex-direction: column;
+            }
+
+            #editBlockModal .form-group:nth-child(2) label {
+                flex-shrink: 0;
+                margin-bottom: 8px;
+            }
+
+            #editBlockModal .save-error-message,
+            #editBlockModal .save-success-message {
+                flex-shrink: 0;
+                margin-top: 15px;
+                margin-bottom: 0;
+            }
+
+            /* Preview-style textarea for block content */
+            #editBlockContent {
+                background: #1e1e1e;
+                padding: 15px;
+                font-family: "Courier New", monospace;
+                font-size: 0.85rem;
+                line-height: 1.5;
+                color: #e0e0e0;
+                border: 1px solid #3a3a3a;
+                border-radius: 4px;
+                white-space: pre;
+                overflow-y: auto;
+                overflow-x: auto;
+                word-break: normal;
+                flex: 1;
+                min-height: 0;
+                resize: none;
+            }
+
+            #editBlockContent::placeholder {
+                color: #666;
+                font-style: italic;
+            }
+
+            #editBlockContent:focus {
+                outline: none;
+                border-color: #4a9eff;
+                box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2);
+            }
+
+            #editBlockName {
+                background: #1e1e1e;
+                color: #e0e0e0;
+                border: 1px solid #3a3a3a;
+                padding: 8px 12px;
+                border-radius: 4px;
+                font-size: 0.9rem;
+            }
+
+            #editBlockName:focus {
+                outline: none;
+                border-color: #4a9eff;
+                box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2);
+            }
+
+            .form-group label {
+                display: block;
+                margin-bottom: 5px;
+                color: #b0b0b0;
+            }
+
+            .form-group input,
+            .form-group select {
+                width: 100%;
+                padding: 8px;
+                background: #3a3a3a;
+                border: 1px solid #4a4a4a;
+                border-radius: 4px;
+                color: #e0e0e0;
+                font-size: 1rem;
+            }
+
+            .composition-list {
+                max-height: 300px;
+                overflow-y: auto;
+            }
+
+            .composition-item {
+                padding: 10px;
+                background: #3a3a3a;
+                margin-bottom: 8px;
+                border-radius: 4px;
+                cursor: pointer;
+                border: 1px solid #4a4a4a;
+                transition: all 0.2s;
+            }
+
+            .composition-item:hover {
+                background: #4a4a4a;
+                border-color: #4a9eff;
+            }
+
+            .composition-item.selected {
+                background: #4a4a4a;
+                border-color: #4a9eff;
+                box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.3);
+            }
+
+            .modal-footer {
+                display: flex;
+                justify-content: flex-end;
+                gap: 10px;
+            }
+
+            /* Scrollbar styling */
+            ::-webkit-scrollbar {
+                width: 8px;
+                height: 8px;
+            }
+
+            ::-webkit-scrollbar-track {
+                background: #2a2a2a;
+            }
+
+            ::-webkit-scrollbar-thumb {
+                background: #4a4a4a;
+                border-radius: 4px;
+            }
+
+            ::-webkit-scrollbar-thumb:hover {
+                background: #5a5a5a;
+            }
+
+            /* Info panel */
+            .info-panel {
+                position: absolute;
+                bottom: 10px;
+                right: 10px;
+                background: rgba(42, 42, 42, 0.95);
+                padding: 15px;
+                border-radius: 6px;
+                border: 1px solid #4a4a4a;
+                max-width: 300px;
+                transition:
+                    opacity 0.3s,
+                    transform 0.3s;
+                z-index: 200;
+            }
+
+            .info-panel.hidden {
+                opacity: 0;
+                transform: translateY(20px);
+                pointer-events: none;
+            }
+
+            .info-panel-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 10px;
+            }
+
+            .info-panel h3 {
+                color: #4a9eff;
+                margin: 0;
+                font-size: 1rem;
+            }
+
+            .info-panel-close {
+                background: none;
+                border: none;
+                color: #999;
+                font-size: 1.2rem;
+                cursor: pointer;
+                padding: 0;
+                width: 20px;
+                height: 20px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: color 0.2s;
+            }
+
+            .info-panel-close:hover {
+                color: #e0e0e0;
+            }
+
+            /* Variables panel */
+            .variables-panel {
+                position: fixed;
+                top: 70px;
+                left: 290px;
+                background: rgba(42, 42, 42, 0.95);
+                padding: 15px;
+                border-radius: 6px;
+                border: 1px solid #4a4a4a;
+                width: 370px;
+                max-height: calc(100vh - 80px);
+                overflow-y: auto;
+                transition:
+                    opacity 0.3s,
+                    transform 0.3s;
+                z-index: 200;
+            }
+
+            .variables-panel.hidden {
+                opacity: 0;
+                transform: translateX(-20px);
+                pointer-events: none;
+            }
+
+            .variables-panel-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 15px;
+            }
+
+            .variables-panel h3 {
+                color: #4a9eff;
+                margin: 0;
+                font-size: 1rem;
+            }
+
+            .variables-panel-close {
+                background: none;
+                border: none;
+                color: #999;
+                font-size: 1.2rem;
+                cursor: pointer;
+                padding: 0;
+                width: 20px;
+                height: 20px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: color 0.2s;
+            }
+
+            .variables-panel-close:hover {
+                color: #e0e0e0;
+            }
+
+            .variable-item {
+                margin-bottom: 0;
+                padding-bottom: 12px;
+                border-bottom: 1px solid #3a3a3a;
+            }
+
+            .variable-item:last-child {
+                border-bottom: none;
+                padding-bottom: 0;
+            }
+
+            .variable-item label {
+                display: block;
+                color: #4a9eff;
+                margin-bottom: 5px;
+                margin-top: 12px;
+                font-size: 0.85rem;
+                font-family: "Courier New", monospace;
+                font-weight: bold;
+            }
+
+            .variable-item:first-child label {
+                margin-top: 0;
+            }
+
+            .variable-item input {
+                width: 100%;
+                padding: 8px;
+                background: #2a2a2a;
+                border: 1px solid #4a4a4a;
+                border-radius: 4px;
+                color: #e0e0e0;
+                font-size: 0.85rem;
+                font-family: "Courier New", monospace;
+            }
+
+            .variable-item input:focus {
+                outline: none;
+                border-color: #4a9eff;
+                box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.1);
+            }
+
+            .variables-empty {
+                color: #999;
+                font-style: italic;
+                text-align: center;
+                padding: 20px;
+            }
+
+            .variables-import {
+                margin-top: 15px;
+                padding-top: 15px;
+                border-top: 1px solid #4a4a4a;
+            }
+
+            .variables-import-btn {
+                width: 100%;
+                padding: 8px 12px;
+                background: #3a3a3a;
+                border: 1px solid #4a4a4a;
+                border-radius: 4px;
+                color: #4a9eff;
+                font-size: 0.85rem;
+                cursor: pointer;
+                transition: all 0.2s;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+            }
+
+            .variables-import-btn:hover {
+                background: #4a4a4a;
+                border-color: #4a9eff;
+            }
+
+            .variables-import-btn i {
+                font-size: 0.9rem;
+            }
+
+            /* Preview panel */
+            .preview-panel {
+                position: fixed;
+                bottom: 0;
+                left: 280px;
+                right: 0;
+                background: rgba(30, 30, 30, 0.5);
+                padding: 0;
+                border-top: 2px solid #4a9eff;
+                height: 250px;
+                min-height: 100px;
+                max-height: 80vh;
+                transition:
+                    opacity 0.3s,
+                    transform 0.3s;
+                z-index: 100;
+                display: flex;
+                flex-direction: column;
+                resize: vertical;
+                overflow: hidden;
+            }
+
+            .preview-resize-handle {
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 6px;
+                cursor: ns-resize;
+                background: transparent;
+                z-index: 101;
+            }
+
+            .preview-resize-handle:hover {
+                background: rgba(74, 158, 255, 0.3);
+            }
+
+            .preview-resize-handle:active {
+                background: rgba(74, 158, 255, 0.5);
+            }
+
+            .preview-panel.hidden {
+                opacity: 0;
+                transform: translateY(100%);
+                pointer-events: none;
+            }
+
+            .preview-panel-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 10px 15px;
+                background: rgba(42, 42, 42, 0.95);
+                border-bottom: 1px solid #4a4a4a;
+            }
+
+            .preview-panel h3 {
+                color: #4a9eff;
+                margin: 0;
+                font-size: 1rem;
+            }
+
+            .preview-panel-close {
+                background: none;
+                border: none;
+                color: #999;
+                font-size: 1.2rem;
+                cursor: pointer;
+                padding: 0;
+                width: 20px;
+                height: 20px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: color 0.2s;
+            }
+
+            .preview-panel-close:hover {
+                color: #e0e0e0;
+            }
+
+            .preview-content {
+                background: rgba(30, 30, 30, 0.5);
+                padding: 15px;
+                font-family: "Courier New", monospace;
+                font-size: 0.85rem;
+                line-height: 1.5;
+                color: #e0e0e0;
+                overflow-y: auto;
+                overflow-x: auto;
+                flex: 1;
+                white-space: pre;
+                word-break: normal;
+                transition: box-shadow 0.3s ease;
+            }
+
+            /* Cyber animation for preview updates */
+            @keyframes previewUpdate {
+                0% {
+                    box-shadow:
+                        inset 0 0 20px rgba(74, 158, 255, 0.8),
+                        0 0 20px rgba(74, 158, 255, 0.6);
+                    border-left: 3px solid #4a9eff;
+                }
+                50% {
+                    box-shadow:
+                        inset 0 0 30px rgba(74, 158, 255, 0.4),
+                        0 0 30px rgba(74, 158, 255, 0.3);
+                    border-left: 3px solid rgba(74, 158, 255, 0.6);
+                }
+                100% {
+                    box-shadow: none;
+                    border-left: 3px solid transparent;
+                }
+            }
+
+            .preview-content.updating {
+                animation: previewUpdate 0.8s ease-out;
+            }
+
+            .preview-content.empty {
+                color: #999;
+                font-style: italic;
+                text-align: center;
+                padding: 40px 20px;
+            }
+
+            .preview-stats {
+                font-size: 0.75rem;
+                color: #999;
+                padding: 8px 15px;
+                background: rgba(42, 42, 42, 0.95);
+                border-top: 1px solid #4a4a4a;
+            }
+
+            .info-panel ul {
+                list-style: none;
+                font-size: 0.85rem;
+                line-height: 1.6;
+            }
+
+            .info-panel li {
+                margin-bottom: 5px;
+            }
+
+            .info-panel kbd {
+                background: #3a3a3a;
+                padding: 2px 6px;
+                border-radius: 3px;
+                border: 1px solid #4a4a4a;
+                font-family: monospace;
+            }
+
+            /* Metadata panel */
+            .metadata-panel {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                background: rgba(42, 42, 42, 0.95);
+                padding: 15px;
+                border-radius: 6px;
+                border: 1px solid #4a4a4a;
+                width: 370px;
+                transition:
+                    opacity 0.3s,
+                    transform 0.3s;
+                z-index: 200;
+            }
+
+            .metadata-panel.hidden {
+                opacity: 0;
+                transform: translateY(-20px);
+                pointer-events: none;
+            }
+
+            .metadata-panel-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 10px;
+            }
+
+            .metadata-panel h3 {
+                color: #4a9eff;
+                margin: 0;
+                font-size: 1rem;
+            }
+
+            .metadata-panel-close {
+                background: none;
+                border: none;
+                color: #999;
+                font-size: 1.2rem;
+                cursor: pointer;
+                padding: 0;
+                width: 20px;
+                height: 20px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: color 0.2s;
+            }
+
+            .metadata-panel-close:hover {
+                color: #e0e0e0;
+            }
+
+            .metadata-item {
+                margin-bottom: 12px;
+            }
+
+            .metadata-label {
+                font-weight: bold;
+                color: #4a9eff;
+                font-size: 0.85rem;
+                margin-bottom: 4px;
+            }
+
+            .metadata-value {
+                font-size: 0.9rem;
+                color: #e0e0e0;
+                word-break: break-all;
+                font-family: "Courier New", monospace;
+                background: #3a3a3a;
+                padding: 6px 8px;
+                border-radius: 3px;
+                border: 1px solid #4a4a4a;
+            }
+
+            .metadata-value.empty {
+                color: #999;
+                font-style: italic;
+                font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="app">
+            <!-- Header -->
+            <div class="header">
+                <h1>
+                    <span
+                        style="cursor: pointer"
+                        onclick="showVersionModal()"
+                        title="Click to view version information"
+                    >
+                        naGINI Web - Script Composer
+                    </span>
+                    <button
+                        id="previewButton"
+                        class="btn"
+                        onclick="togglePreviewPanel()"
+                        style="margin-left: 15px"
+                    >
+                        <span>Script <u>P</u>review</span>
+                    </button>
+                    <button
+                        id="metadataButton"
+                        class="btn"
+                        onclick="toggleMetadataPanel()"
+                        style="margin-left: 10px"
+                    >
+                        <span><u>M</u>etadata</span>
+                    </button>
+                    <button
+                        id="helpButton"
+                        class="btn"
+                        onclick="toggleInfoPanel()"
+                        style="margin-left: 10px"
+                    >
+                        <span><u>H</u>elp</span>
+                    </button>
+                    <button
+                        id="variablesButton"
+                        class="btn"
+                        onclick="toggleVariablesPanel()"
+                        style="margin-left: 10px"
+                    >
+                        <span><u>V</u>ariables</span>
+                    </button>
+                </h1>
+                <div class="header-actions">
+                    <button class="btn" onclick="app.loadComposition()">
+                        Load Composition
+                    </button>
+                    <button
+                        id="saveButton"
+                        class="btn"
+                        onclick="app.saveComposition()"
+                        style="display: none"
+                    >
+                        Save Composition
+                    </button>
+                    <button
+                        id="clearButton"
+                        class="btn"
+                        onclick="app.clearCanvas()"
+                        style="display: none"
+                    >
+                        Clear
+                    </button>
+                    <button id="loginButton" class="btn">
+                        <span id="loginButtonText">Login</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Main content -->
+            <div class="main-content">
+                <!-- Sidebar with blocks -->
+                <div class="sidebar">
+                    <div class="sidebar-header">
+                        <div
+                            style="display: flex; align-items: center; gap: 8px"
+                        >
+                            Available Blocks
+                        </div>
+                        <button
+                            id="newBlockButton"
+                            class="btn"
+                            onclick="app.createNewBlock()"
+                            title="Create New Block"
+                            style="
+                                padding: 4px 8px;
+                                font-size: 0.85rem;
+                                display: none;
+                            "
+                        >
+                            New
+                        </button>
+                    </div>
+                    <div class="blocks-list" id="blocksList">
+                        <!-- Blocks will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Canvas -->
+                <div class="canvas-container">
+                    <div id="canvas">
+                        <svg
+                            id="connections"
+                            style="
+                                position: absolute;
+                                top: 0;
+                                left: 0;
+                                width: 100%;
+                                height: 100%;
+                                pointer-events: none;
+                                z-index: 1;
+                            "
+                        ></svg>
+                    </div>
+
+                    <!-- Variables panel -->
+                    <div class="variables-panel hidden" id="variablesPanel">
+                        <div class="variables-panel-header">
+                            <h3>Variables</h3>
+                            <button
+                                class="variables-panel-close"
+                                onclick="closeVariablesPanel()"
+                                title="Close variables"
+                            >
+                                ×
+                            </button>
+                        </div>
+                        <div id="variablesContent">
+                            <div class="variables-empty">
+                                No variables found. Use {{"{{"}} variable_name
+                                {{"}}"}} in your blocks.
+                            </div>
+                        </div>
+                        <div
+                            id="variablesImportMessage"
+                            style="
+                                display: none;
+                                margin-top: 15px;
+                                padding: 10px;
+                                border-radius: 4px;
+                                font-size: 0.85rem;
+                            "
+                        ></div>
+                        <div class="variables-import">
+                            <input
+                                type="file"
+                                id="variablesFileInput"
+                                accept=".json"
+                                style="display: none"
+                                onchange="app.importVariablesFromFile(event)"
+                            />
+                            <button
+                                class="variables-import-btn"
+                                onclick="document.getElementById('variablesFileInput').click()"
+                            >
+                                <span>Import Variables from JSON</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Metadata panel -->
+                    <div class="metadata-panel" id="metadataPanel">
+                        <div class="metadata-panel-header">
+                            <h3>Composition Metadata</h3>
+                            <button
+                                class="metadata-panel-close"
+                                onclick="closeMetadataPanel()"
+                                title="Close metadata"
+                            >
+                                ×
+                            </button>
+                        </div>
+                        <div class="metadata-item" id="emptyStateMessage">
+                            <div
+                                class="metadata-value empty"
+                                style="text-align: center; padding: 20px"
+                            >
+                                No composition loaded
+                            </div>
+                        </div>
+                        <div
+                            class="metadata-item"
+                            id="compositionNameSection"
+                            style="display: none"
+                        >
+                            <div class="metadata-label">Composition Name:</div>
+                            <div
+                                class="metadata-value"
+                                id="compositionNameDisplay"
+                            ></div>
+                        </div>
+                        <div
+                            class="metadata-item"
+                            id="blocksStatusSection"
+                            style="display: none"
+                        >
+                            <div class="metadata-label">
+                                Connected / Not Connected Blocks:
+                            </div>
+                            <div
+                                class="metadata-value"
+                                id="blocksStatusDisplay"
+                            ></div>
+                        </div>
+                        <div
+                            class="metadata-item"
+                            id="variablesStatusSection"
+                            style="display: none"
+                        >
+                            <div class="metadata-label">
+                                Filled / Total Variables:
+                            </div>
+                            <div
+                                class="metadata-value"
+                                id="variablesStatusDisplay"
+                            ></div>
+                        </div>
+                        <div
+                            class="metadata-item"
+                            id="publishStatusSection"
+                            style="display: none"
+                        >
+                            <div class="metadata-label">Publish Status:</div>
+                            <div
+                                class="metadata-value"
+                                id="publishStatusDisplay"
+                            ></div>
+                        </div>
+                        <div
+                            class="metadata-item"
+                            id="encryptionPassphraseSection"
+                            style="display: none"
+                        >
+                            <div class="metadata-label">
+                                🔒 Encryption Passphrase:
+                            </div>
+                            <div style="margin-top: 8px">
+                                <input
+                                    type="password"
+                                    id="publishPassphrase"
+                                    placeholder="Enter passphrase (min 8 chars)"
+                                    autocomplete="new-password"
+                                    style="
+                                        width: 100%;
+                                        padding: 8px;
+                                        background: #2a2a2a;
+                                        border: 1px solid #4a4a4a;
+                                        color: #e0e0e0;
+                                        border-radius: 4px;
+                                        font-size: 0.9rem;
+                                        margin-bottom: 8px;
+                                    "
+                                    oninput="app.validatePublishPassphrase()"
+                                />
+                                <input
+                                    type="password"
+                                    id="publishPassphraseConfirm"
+                                    placeholder="Confirm passphrase"
+                                    autocomplete="new-password"
+                                    style="
+                                        width: 100%;
+                                        padding: 8px;
+                                        background: #2a2a2a;
+                                        border: 1px solid #4a4a4a;
+                                        color: #e0e0e0;
+                                        border-radius: 4px;
+                                        font-size: 0.9rem;
+                                        margin-bottom: 8px;
+                                    "
+                                    oninput="app.validatePublishPassphrase()"
+                                    onkeydown="if(event.key === 'Enter' && !document.getElementById('publishButton').disabled) app.publishComposition()"
+                                />
+                                <div
+                                    id="passphraseError"
+                                    style="
+                                        display: none;
+                                        padding: 8px;
+                                        background: rgba(244, 67, 54, 0.1);
+                                        border: 1px solid #f44336;
+                                        border-radius: 4px;
+                                        color: #f44336;
+                                        font-size: 0.85rem;
+                                        margin-bottom: 8px;
+                                    "
+                                ></div>
+                                <div
+                                    style="
+                                        padding: 8px;
+                                        background: rgba(74, 158, 255, 0.1);
+                                        border-radius: 4px;
+                                        font-size: 0.8rem;
+                                        color: #999;
+                                    "
+                                >
+                                    <strong>⚠️ Important:</strong> Your script
+                                    will be encrypted with AES-256-GCM. Refer
+                                    ENCRYPTION.md for decryption.
+                                </div>
+                            </div>
+                        </div>
+                        <div
+                            class="metadata-item"
+                            id="publishButtonSection"
+                            style="display: none"
+                        >
+                            <button
+                                id="publishButton"
+                                class="btn success"
+                                onclick="app.publishComposition()"
+                                style="width: 100%"
+                                disabled
+                            >
+                                Encrypt & Publish
+                            </button>
+                        </div>
+                        <div
+                            class="metadata-item"
+                            id="sha256Section"
+                            style="display: none"
+                        >
+                            <div class="metadata-label" id="sha256Label">
+                                SHA256 Hash:
+                            </div>
+                            <div
+                                class="metadata-value"
+                                id="sha256HashDisplay"
+                            ></div>
+                        </div>
+                        <div
+                            class="metadata-item"
+                            id="urlSection"
+                            style="display: none"
+                        >
+                            <div class="metadata-label">Composition URL:</div>
+                            <div
+                                class="metadata-value"
+                                style="
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 8px;
+                                "
+                            >
+                                <a
+                                    id="compositionUrlLink"
+                                    href=""
+                                    target="_blank"
+                                    style="
+                                        color: #4a9eff;
+                                        text-decoration: none;
+                                        flex: 1;
+                                        overflow: hidden;
+                                        text-overflow: ellipsis;
+                                        white-space: nowrap;
+                                    "
+                                ></a>
+                                <button
+                                    class="btn"
+                                    onclick="app.copyCompositionUrl()"
+                                    title="Copy URL"
+                                    style="padding: 4px 8px; font-size: 0.85rem"
+                                >
+                                    Copy
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Preview panel -->
+                    <div class="preview-panel" id="previewPanel">
+                        <div
+                            class="preview-resize-handle"
+                            id="previewResizeHandle"
+                        ></div>
+                        <div class="preview-panel-header">
+                            <h3>Script Preview</h3>
+                            <button
+                                class="preview-panel-close"
+                                onclick="closePreviewPanel()"
+                                title="Close preview"
+                            >
+                                ×
+                            </button>
+                        </div>
+                        <div id="previewContent" class="preview-content empty">
+                            No connected blocks to preview
+                        </div>
+                        <div class="preview-stats" id="previewStats"></div>
+                    </div>
+
+                    <!-- Info panel -->
+                    <div class="info-panel hidden" id="infoPanel">
+                        <div class="info-panel-header">
+                            <h3>Quick Help</h3>
+                            <button
+                                class="info-panel-close"
+                                onclick="closeInfoPanel()"
+                                title="Close help"
+                            >
+                                ×
+                            </button>
+                        </div>
+                        <ul>
+                            <li>
+                                <strong>Drag</strong> blocks from sidebar to
+                                canvas
+                            </li>
+                            <li>
+                                <strong>Connect</strong> nodes by dragging from
+                                output to input
+                            </li>
+                            <li>
+                                <strong>Move</strong> nodes by dragging the
+                                header
+                            </li>
+                            <li>
+                                <strong>Remove</strong> nodes with the × button
+                            </li>
+                            <li>
+                                <strong>Save</strong> to create your composition
+                                URL
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Save Modal -->
+        <div id="saveModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Save Composition</h2>
+                    <button class="modal-close" onclick="app.closeSaveModal()">
+                        ×
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="compositionName">Composition Name:</label>
+                        <input
+                            type="text"
+                            id="compositionName"
+                            placeholder="my_composition"
+                            value=""
+                            onkeydown="if(event.key === 'Enter') app.doSave()"
+                        />
+                    </div>
+                    <div class="save-error-message" id="saveErrorMessage">
+                        <div class="save-error-title">
+                            Cannot Save Composition!
+                        </div>
+                        <div class="save-error-info" id="saveErrorInfo"></div>
+                    </div>
+                    <div class="save-success-message" id="saveSuccessMessage">
+                        <div class="save-success-title">
+                            <i class="fas fa-check-circle"></i>
+                            Composition Saved Successfully!
+                        </div>
+                        <div class="save-success-info">
+                            Your composition has been saved and can be loaded
+                            from the Load menu.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer" id="saveModalFooter">
+                    <button class="btn" onclick="app.closeSaveModal()">
+                        Cancel
+                    </button>
+                    <button class="btn primary" onclick="app.doSave()">
+                        <i class="fas fa-save"></i> Save
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Load Modal -->
+        <div id="loadModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Load Composition</h2>
+                    <button class="modal-close" onclick="app.closeLoadModal()">
+                        ×
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="composition-list" id="compositionList">
+                        <!-- Compositions will be loaded here -->
+                    </div>
+                    <div class="save-error-message" id="loadErrorMessage">
+                        <div class="save-error-title">
+                            <i class="fas fa-exclamation-circle"></i>
+                            Error Loading Compositions
+                        </div>
+                        <div class="save-error-info" id="loadErrorInfo"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" onclick="app.closeLoadModal()">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Edit Block Modal -->
+        <div id="editBlockModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Edit Block</h2>
+                    <button
+                        class="modal-close"
+                        onclick="app.closeEditBlockModal()"
+                    >
+                        ×
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="editBlockName">Block Name:</label>
+                        <input
+                            type="text"
+                            id="editBlockName"
+                            placeholder="Block name"
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label for="editBlockContent">Block Content:</label>
+                        <textarea
+                            id="editBlockContent"
+                            placeholder="Block content"
+                        ></textarea>
+                    </div>
+                    <div class="save-error-message" id="editBlockErrorMessage">
+                        <div class="save-error-title">
+                            <i class="fas fa-exclamation-circle"></i> Error
+                            Editing Block
+                        </div>
+                        <div
+                            class="save-error-info"
+                            id="editBlockErrorInfo"
+                        ></div>
+                    </div>
+                    <div
+                        class="save-success-message"
+                        id="editBlockSuccessMessage"
+                    >
+                        <div class="save-success-title">
+                            <i class="fas fa-check-circle"></i>
+                            Block Updated Successfully!
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer" id="editBlockModalFooter">
+                    <div
+                        style="
+                            flex: 1;
+                            color: #999;
+                            font-size: 0.85rem;
+                            display: flex;
+                            align-items: center;
+                        "
+                    >
+                        <span
+                            ><kbd
+                                style="
+                                    background: #3a3a3a;
+                                    padding: 2px 6px;
+                                    border-radius: 3px;
+                                    font-size: 0.8rem;
+                                "
+                                >Esc</kbd
+                            >
+                            to close •
+                            <kbd
+                                style="
+                                    background: #3a3a3a;
+                                    padding: 2px 6px;
+                                    border-radius: 3px;
+                                    font-size: 0.8rem;
+                                "
+                                >Ctrl+Enter</kbd
+                            >
+                            to save</span
+                        >
+                    </div>
+                    <button class="btn" onclick="app.closeEditBlockModal()">
+                        Cancel
+                    </button>
+                    <button
+                        class="btn"
+                        style="background: #f44336; display: none"
+                        id="deleteBlockBtn"
+                        onclick="app.showDeleteBlockConfirmation()"
+                    >
+                        Delete
+                    </button>
+                    <button class="btn primary" onclick="app.doEditBlock()">
+                        Save Changes
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Delete Block Confirmation Modal -->
+        <div id="deleteBlockModal" class="modal">
+            <div class="modal-content" style="max-width: 500px">
+                <div class="modal-header">
+                    <h2>Confirm Deletion</h2>
+                    <button
+                        class="modal-close"
+                        onclick="app.closeDeleteBlockConfirmation()"
+                    >
+                        ×
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p style="margin-bottom: 15px">
+                        Are you sure you want to delete this block?
+                    </p>
+                    <p
+                        style="
+                            background: rgba(244, 67, 54, 0.1);
+                            border: 1px solid #f44336;
+                            border-radius: 4px;
+                            padding: 10px;
+                            color: #f44336;
+                            margin-bottom: 0;
+                        "
+                    >
+                        <strong>Warning:</strong> This action cannot be undone.
+                        The block will be permanently deleted.
+                    </p>
+                    <div
+                        id="deleteBlockError"
+                        style="
+                            display: none;
+                            margin-top: 15px;
+                            padding: 10px;
+                            background: rgba(244, 67, 54, 0.1);
+                            border: 1px solid #f44336;
+                            border-radius: 4px;
+                            color: #f44336;
+                        "
+                    ></div>
+                </div>
+                <div class="modal-footer">
+                    <button
+                        class="btn"
+                        onclick="app.closeDeleteBlockConfirmation()"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        class="btn"
+                        style="background: #f44336"
+                        onclick="app.doDeleteBlock()"
+                    >
+                        <i class="fas fa-trash"></i> Delete Block
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Login Modal -->
+        <div id="loginModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Login</h2>
+                    <button class="modal-close" onclick="closeLoginModal()">
+                        ×
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="loginUsername">Username:</label>
+                        <input
+                            type="text"
+                            id="loginUsername"
+                            placeholder="Enter username"
+                            onkeydown="if(event.key === 'Enter') doLogin()"
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">Password:</label>
+                        <input
+                            type="password"
+                            id="loginPassword"
+                            placeholder="Enter password"
+                            onkeydown="if(event.key === 'Enter') doLogin()"
+                        />
+                    </div>
+                    <div
+                        id="loginError"
+                        style="
+                            display: none;
+                            margin-top: 10px;
+                            padding: 10px;
+                            background: rgba(244, 67, 54, 0.1);
+                            border: 1px solid #f44336;
+                            border-radius: 4px;
+                            color: #f44336;
+                        "
+                    ></div>
+                    <div
+                        id="loginHintSection"
+                        style="margin-top: 15px; color: #999; font-size: 0.9rem"
+                    >
+                        <p>Default admin credentials:</p>
+                        <p style="margin-top: 5px">
+                            Username: <code>admin</code> | Password:
+                            <code>admin</code>
+                        </p>
+                    </div>
+                    <div
+                        id="loginRegisterSection"
+                        style="margin-top: 15px; display: none"
+                    >
+                        <button
+                            class="btn"
+                            onclick="showRegisterModal()"
+                            style="width: 100%"
+                        >
+                            Register New Account
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" onclick="closeLoginModal()">
+                        Cancel
+                    </button>
+                    <button class="btn primary" onclick="doLogin()">
+                        Login
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Register Modal -->
+        <div id="registerModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Register New Account</h2>
+                    <button class="modal-close" onclick="closeRegisterModal()">
+                        ×
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="registerUsername">Username:</label>
+                        <input
+                            type="text"
+                            id="registerUsername"
+                            placeholder="Choose a username"
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label for="registerEmail">Email Address:</label>
+                        <input
+                            type="email"
+                            id="registerEmail"
+                            placeholder="your@email.com"
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label for="registerPassword">Password:</label>
+                        <input
+                            type="password"
+                            id="registerPassword"
+                            placeholder="Choose a password"
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label for="registerConfirmPassword"
+                            >Confirm Password:</label
+                        >
+                        <input
+                            type="password"
+                            id="registerConfirmPassword"
+                            placeholder="Confirm your password"
+                            onkeydown="if(event.key === 'Enter') doRegister()"
+                        />
+                    </div>
+                    <div
+                        id="registerError"
+                        style="
+                            display: none;
+                            margin-top: 10px;
+                            padding: 10px;
+                            background: rgba(244, 67, 54, 0.1);
+                            border: 1px solid #f44336;
+                            border-radius: 4px;
+                            color: #f44336;
+                        "
+                    ></div>
+                    <div
+                        id="registerSuccess"
+                        style="
+                            display: none;
+                            margin-top: 10px;
+                            padding: 10px;
+                            background: rgba(76, 175, 80, 0.1);
+                            border: 1px solid #4caf50;
+                            border-radius: 4px;
+                            color: #4caf50;
+                        "
+                    ></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" onclick="closeRegisterModal()">
+                        Cancel
+                    </button>
+                    <button class="btn primary" onclick="doRegister()">
+                        Register
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- User Settings Modal -->
+        <div id="userSettingsModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>User Settings</h2>
+                    <button
+                        class="modal-close"
+                        onclick="closeUserSettingsModal()"
+                    >
+                        ×
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div
+                        style="
+                            margin-bottom: 20px;
+                            padding-bottom: 15px;
+                            border-bottom: 1px solid #3a3a3a;
+                        "
+                    >
+                        <div
+                            style="
+                                color: #999;
+                                font-size: 0.9rem;
+                                margin-bottom: 5px;
+                            "
+                        >
+                            Username:
+                        </div>
+                        <div
+                            id="settingsUsername"
+                            style="font-size: 1.1rem; color: #4a9eff"
+                        ></div>
+                        <div
+                            style="
+                                color: #999;
+                                font-size: 0.85rem;
+                                margin-top: 5px;
+                            "
+                        >
+                            Role:
+                            <span
+                                id="settingsRole"
+                                style="color: #e0e0e0"
+                            ></span>
+                        </div>
+                        <div
+                            style="
+                                color: #999;
+                                font-size: 0.85rem;
+                                margin-top: 5px;
+                            "
+                        >
+                            Email:
+                            <span
+                                id="settingsEmail"
+                                style="color: #e0e0e0"
+                            ></span>
+                        </div>
+                    </div>
+
+                    <h3 style="margin-bottom: 15px; font-size: 1.1rem">
+                        Update Email Address
+                    </h3>
+                    <div class="form-group">
+                        <label for="newEmail">New Email:</label>
+                        <input
+                            type="email"
+                            id="newEmail"
+                            placeholder="Enter new email address"
+                        />
+                    </div>
+                    <div
+                        id="emailChangeError"
+                        style="
+                            display: none;
+                            margin-top: 10px;
+                            padding: 10px;
+                            background: rgba(244, 67, 54, 0.1);
+                            border: 1px solid #f44336;
+                            border-radius: 4px;
+                            color: #f44336;
+                        "
+                    ></div>
+                    <div
+                        id="emailChangeSuccess"
+                        style="
+                            display: none;
+                            margin-top: 10px;
+                            padding: 10px;
+                            background: rgba(76, 175, 80, 0.1);
+                            border: 1px solid #4caf50;
+                            border-radius: 4px;
+                            color: #4caf50;
+                        "
+                    ></div>
+                    <div style="margin-bottom: 20px">
+                        <button class="btn primary" onclick="doChangeEmail()">
+                            Update Email
+                        </button>
+                    </div>
+
+                    <h3 style="margin-bottom: 15px; font-size: 1.1rem">
+                        Change Password
+                    </h3>
+                    <div class="form-group">
+                        <label for="currentPassword">Current Password:</label>
+                        <input
+                            type="password"
+                            id="currentPassword"
+                            placeholder="Enter current password"
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label for="newPassword">New Password:</label>
+                        <input
+                            type="password"
+                            id="newPassword"
+                            placeholder="Enter new password"
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label for="confirmPassword"
+                            >Confirm New Password:</label
+                        >
+                        <input
+                            type="password"
+                            id="confirmPassword"
+                            placeholder="Confirm new password"
+                            onkeydown="if(event.key === 'Enter') doChangePassword()"
+                        />
+                    </div>
+                    <div
+                        id="passwordChangeError"
+                        style="
+                            display: none;
+                            margin-top: 10px;
+                            padding: 10px;
+                            background: rgba(244, 67, 54, 0.1);
+                            border: 1px solid #f44336;
+                            border-radius: 4px;
+                            color: #f44336;
+                        "
+                    ></div>
+                    <div
+                        id="passwordChangeSuccess"
+                        style="
+                            display: none;
+                            margin-top: 10px;
+                            padding: 10px;
+                            background: rgba(76, 175, 80, 0.1);
+                            border: 1px solid #4caf50;
+                            border-radius: 4px;
+                            color: #4caf50;
+                        "
+                    ></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" onclick="closeUserSettingsModal()">
+                        Close
+                    </button>
+                    <button
+                        class="btn"
+                        onclick="doLogout()"
+                        style="margin-right: auto"
+                    >
+                        Logout
+                    </button>
+                    <button class="btn primary" onclick="doChangePassword()">
+                        Change Password
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Version Modal -->
+        <div id="versionModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>About naGINI Web</h2>
+                    <button class="modal-close" onclick="closeVersionModal()">
+                        ×
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div style="text-align: center; padding: 20px 0">
+                        <h3 style="margin-bottom: 10px">
+                            naGINI Web - Script Composer
+                        </h3>
+                        <p style="color: #999; margin-bottom: 20px">
+                            Visual Script Composer
+                        </p>
+                        <div
+                            style="
+                                background: #3a3a3a;
+                                padding: 15px;
+                                border-radius: 4px;
+                                margin-bottom: 15px;
+                            "
+                        >
+                            <div
+                                style="
+                                    color: #999;
+                                    font-size: 0.9rem;
+                                    margin-bottom: 5px;
+                                "
+                            >
+                                Version
+                            </div>
+                            <div
+                                id="versionText"
+                                style="
+                                    font-family:
+                                        &quot;Courier New&quot;, monospace;
+                                    font-size: 1.2rem;
+                                    color: #4a9eff;
+                                "
+                            >
+                                Loading...
+                            </div>
+                        </div>
+                        <p
+                            style="
+                                color: #999;
+                                font-size: 0.85rem;
+                                font-style: italic;
+                            "
+                        >
+                            A tool for managing and composing reusable code
+                            blocks
+                        </p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" onclick="closeVersionModal()">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <script src="/static/app.js"></script>
+        <script src="/static/crypto.js"></script>
+        <script>
+            // Version Modal Functions
+            async function showVersionModal() {
+                const modal = document.getElementById("versionModal");
+                const versionText = document.getElementById("versionText");
+
+                modal.classList.add("active");
+
+                try {
+                    const response = await fetch("/api/version", {
+                        credentials: "same-origin",
+                    });
+                    const data = await response.json();
+                    versionText.textContent = data.version;
+                } catch (error) {
+                    console.error("Error fetching version:", error);
+                    versionText.textContent = "Unknown";
+                }
+            }
+
+            function closeVersionModal() {
+                const modal = document.getElementById("versionModal");
+                modal.classList.remove("active");
+            }
+
+            // Close version modal on Escape key
+            document.addEventListener("keydown", (e) => {
+                if (e.key === "Escape") {
+                    const versionModal =
+                        document.getElementById("versionModal");
+                    if (versionModal.classList.contains("active")) {
+                        closeVersionModal();
+                    }
+                    const loginModal = document.getElementById("loginModal");
+                    if (loginModal.classList.contains("active")) {
+                        closeLoginModal();
+                    }
+                    const userSettingsModal =
+                        document.getElementById("userSettingsModal");
+                    if (userSettingsModal.classList.contains("active")) {
+                        closeUserSettingsModal();
+                    }
+                    const registerModal =
+                        document.getElementById("registerModal");
+                    if (registerModal.classList.contains("active")) {
+                        closeRegisterModal();
+                    }
+                }
+            });
+
+            // Authentication functions
+            window.currentUser = null;
+
+            async function checkAuthStatus() {
+                try {
+                    const response = await fetch("/api/auth/me", {
+                        credentials: "same-origin",
+                    });
+                    const data = await response.json();
+                    window.currentUser = data;
+                    updateLoginButton();
+                    // Re-render blocks to show/hide edit icons
+                    if (window.app) {
+                        app.renderBlocks();
+                    }
+                } catch (error) {
+                    console.error("Error checking auth status:", error);
+                    window.currentUser = {
+                        authenticated: false,
+                        role: "anonymous",
+                    };
+                    updateLoginButton();
+                }
+            }
+
+            function updateLoginButton() {
+                const loginButton = document.getElementById("loginButton");
+                const loginButtonText =
+                    document.getElementById("loginButtonText");
+                const newBlockButton =
+                    document.getElementById("newBlockButton");
+                const saveButton = document.getElementById("saveButton");
+                const clearButton = document.getElementById("clearButton");
+
+                if (!loginButton || !loginButtonText) {
+                    console.error("Login button elements not found");
+                    return;
+                }
+
+                if (window.currentUser && window.currentUser.authenticated) {
+                    loginButtonText.textContent = window.currentUser.username;
+                    loginButton.classList.add("success");
+                    loginButton.onclick = function (e) {
+                        e.preventDefault();
+                        showUserMenu();
+                    };
+
+                    // Show/hide admin-only buttons based on role
+                    const isAdmin = window.currentUser.role === "admin";
+                    if (newBlockButton) {
+                        newBlockButton.style.display = isAdmin
+                            ? "block"
+                            : "none";
+                    }
+                    if (saveButton) {
+                        saveButton.style.display = isAdmin ? "flex" : "none";
+                    }
+                    if (clearButton) {
+                        clearButton.style.display = isAdmin ? "flex" : "none";
+                    }
+                } else {
+                    loginButtonText.textContent = "Login";
+                    loginButton.classList.remove("success");
+                    loginButton.onclick = function (e) {
+                        e.preventDefault();
+                        showLoginModal();
+                    };
+
+                    // Hide admin-only buttons for non-authenticated users
+                    if (newBlockButton) {
+                        newBlockButton.style.display = "none";
+                    }
+                    if (saveButton) {
+                        saveButton.style.display = "none";
+                    }
+                    if (clearButton) {
+                        clearButton.style.display = "none";
+                    }
+                }
+            }
+
+            function showUserMenu() {
+                showUserSettingsModal();
+            }
+
+            function showUserSettingsModal() {
+                const modal = document.getElementById("userSettingsModal");
+                const usernameDisplay =
+                    document.getElementById("settingsUsername");
+                const roleDisplay = document.getElementById("settingsRole");
+                const emailDisplay = document.getElementById("settingsEmail");
+                const errorDiv = document.getElementById("passwordChangeError");
+                const successDiv = document.getElementById(
+                    "passwordChangeSuccess",
+                );
+                const emailErrorDiv =
+                    document.getElementById("emailChangeError");
+                const emailSuccessDiv =
+                    document.getElementById("emailChangeSuccess");
+
+                usernameDisplay.textContent = window.currentUser.username;
+                roleDisplay.textContent = window.currentUser.role;
+                emailDisplay.textContent =
+                    window.currentUser.email || "Not set";
+
+                // Clear password fields
+                document.getElementById("currentPassword").value = "";
+                document.getElementById("newPassword").value = "";
+                document.getElementById("confirmPassword").value = "";
+
+                // Clear email field
+                document.getElementById("newEmail").value = "";
+
+                // Hide messages
+                errorDiv.style.display = "none";
+                successDiv.style.display = "none";
+                emailErrorDiv.style.display = "none";
+                emailSuccessDiv.style.display = "none";
+
+                modal.classList.add("active");
+            }
+
+            function closeUserSettingsModal() {
+                const modal = document.getElementById("userSettingsModal");
+                modal.classList.remove("active");
+            }
+
+            async function showLoginModal() {
+                const modal = document.getElementById("loginModal");
+                const errorDiv = document.getElementById("loginError");
+                const usernameInput = document.getElementById("loginUsername");
+                const passwordInput = document.getElementById("loginPassword");
+                const hintSection = document.getElementById("loginHintSection");
+                const registerSection = document.getElementById(
+                    "loginRegisterSection",
+                );
+
+                // Check if admin has default password
+                try {
+                    const response = await fetch("/api/auth/admin-default", {
+                        credentials: "same-origin",
+                    });
+                    const data = await response.json();
+
+                    if (data.is_default) {
+                        hintSection.style.display = "block";
+                        registerSection.style.display = "none";
+                    } else {
+                        hintSection.style.display = "none";
+                        registerSection.style.display = "block";
+                    }
+                } catch (error) {
+                    console.error("Error checking admin password:", error);
+                }
+
+                modal.classList.add("active");
+                errorDiv.style.display = "none";
+                usernameInput.value = "";
+                passwordInput.value = "";
+
+                setTimeout(() => {
+                    usernameInput.focus();
+                }, 100);
+            }
+
+            function closeLoginModal() {
+                const modal = document.getElementById("loginModal");
+                modal.classList.remove("active");
+            }
+
+            async function doLogin() {
+                const username = document
+                    .getElementById("loginUsername")
+                    .value.trim();
+                const password = document.getElementById("loginPassword").value;
+                const errorDiv = document.getElementById("loginError");
+
+                if (!username || !password) {
+                    errorDiv.textContent = "Please enter username and password";
+                    errorDiv.style.display = "block";
+                    return;
+                }
+
+                try {
+                    const response = await fetch("/api/auth/login", {
+                        method: "POST",
+                        credentials: "same-origin",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({ username, password }),
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.success) {
+                        closeLoginModal();
+                        await checkAuthStatus();
+                    } else {
+                        errorDiv.textContent =
+                            data.error || "Login failed. Please try again.";
+                        errorDiv.style.display = "block";
+                    }
+                } catch (error) {
+                    console.error("Login error:", error);
+                    errorDiv.textContent =
+                        "An error occurred. Please try again.";
+                    errorDiv.style.display = "block";
+                }
+            }
+
+            async function doLogout() {
+                try {
+                    const response = await fetch("/api/auth/logout", {
+                        method: "POST",
+                        credentials: "same-origin",
+                    });
+
+                    if (response.ok) {
+                        window.currentUser = null;
+                        updateLoginButton();
+                        closeUserSettingsModal();
+                        // Re-render blocks to hide edit icons
+                        if (window.app) {
+                            app.renderBlocks();
+                        }
+                    }
+                } catch (error) {
+                    console.error("Logout error:", error);
+                }
+            }
+
+            async function doChangePassword() {
+                const currentPassword =
+                    document.getElementById("currentPassword").value;
+                const newPassword =
+                    document.getElementById("newPassword").value;
+                const confirmPassword =
+                    document.getElementById("confirmPassword").value;
+                const errorDiv = document.getElementById("passwordChangeError");
+                const successDiv = document.getElementById(
+                    "passwordChangeSuccess",
+                );
+
+                // Hide previous messages
+                errorDiv.style.display = "none";
+                successDiv.style.display = "none";
+
+                // Validate inputs
+                if (!currentPassword || !newPassword || !confirmPassword) {
+                    errorDiv.textContent = "Please fill in all password fields";
+                    errorDiv.style.display = "block";
+                    return;
+                }
+
+                if (newPassword !== confirmPassword) {
+                    errorDiv.textContent = "New passwords do not match";
+                    errorDiv.style.display = "block";
+                    return;
+                }
+
+                if (newPassword.length < 4) {
+                    errorDiv.textContent =
+                        "New password must be at least 4 characters long";
+                    errorDiv.style.display = "block";
+                    return;
+                }
+
+                try {
+                    const response = await fetch("/api/auth/change-password", {
+                        method: "POST",
+                        credentials: "same-origin",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            current_password: currentPassword,
+                            new_password: newPassword,
+                        }),
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.success) {
+                        successDiv.textContent =
+                            "Password changed successfully!";
+                        successDiv.style.display = "block";
+
+                        // Clear password fields
+                        document.getElementById("currentPassword").value = "";
+                        document.getElementById("newPassword").value = "";
+                        document.getElementById("confirmPassword").value = "";
+                    } else {
+                        errorDiv.textContent =
+                            data.error ||
+                            "Failed to change password. Please try again.";
+                        errorDiv.style.display = "block";
+                    }
+                } catch (error) {
+                    console.error("Password change error:", error);
+                    errorDiv.textContent =
+                        "An error occurred. Please try again.";
+                    errorDiv.style.display = "block";
+                }
+            }
+
+            function showRegisterModal() {
+                closeLoginModal();
+                const modal = document.getElementById("registerModal");
+                const errorDiv = document.getElementById("registerError");
+                const successDiv = document.getElementById("registerSuccess");
+                const usernameInput =
+                    document.getElementById("registerUsername");
+                const emailInput = document.getElementById("registerEmail");
+                const passwordInput =
+                    document.getElementById("registerPassword");
+                const confirmPasswordInput = document.getElementById(
+                    "registerConfirmPassword",
+                );
+
+                modal.classList.add("active");
+                errorDiv.style.display = "none";
+                successDiv.style.display = "none";
+                usernameInput.value = "";
+                emailInput.value = "";
+                passwordInput.value = "";
+                confirmPasswordInput.value = "";
+
+                setTimeout(() => {
+                    usernameInput.focus();
+                }, 100);
+            }
+
+            function closeRegisterModal() {
+                const modal = document.getElementById("registerModal");
+                modal.classList.remove("active");
+            }
+
+            async function doRegister() {
+                const username = document
+                    .getElementById("registerUsername")
+                    .value.trim();
+                const email = document
+                    .getElementById("registerEmail")
+                    .value.trim();
+                const password =
+                    document.getElementById("registerPassword").value;
+                const confirmPassword = document.getElementById(
+                    "registerConfirmPassword",
+                ).value;
+                const errorDiv = document.getElementById("registerError");
+                const successDiv = document.getElementById("registerSuccess");
+
+                errorDiv.style.display = "none";
+                successDiv.style.display = "none";
+
+                if (!username || !email || !password || !confirmPassword) {
+                    errorDiv.textContent = "Please fill in all fields";
+                    errorDiv.style.display = "block";
+                    return;
+                }
+
+                // Basic email validation
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(email)) {
+                    errorDiv.textContent = "Please enter a valid email address";
+                    errorDiv.style.display = "block";
+                    return;
+                }
+
+                if (password !== confirmPassword) {
+                    errorDiv.textContent = "Passwords do not match";
+                    errorDiv.style.display = "block";
+                    return;
+                }
+
+                if (password.length < 4) {
+                    errorDiv.textContent =
+                        "Password must be at least 4 characters long";
+                    errorDiv.style.display = "block";
+                    return;
+                }
+
+                try {
+                    const response = await fetch("/api/auth/register", {
+                        method: "POST",
+                        credentials: "same-origin",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({ username, email, password }),
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.success) {
+                        successDiv.textContent =
+                            "Account created successfully! You can now login.";
+                        successDiv.style.display = "block";
+
+                        // Clear form
+                        document.getElementById("registerUsername").value = "";
+                        document.getElementById("registerEmail").value = "";
+                        document.getElementById("registerPassword").value = "";
+                        document.getElementById(
+                            "registerConfirmPassword",
+                        ).value = "";
+
+                        // Close modal and open login after 2 seconds
+                        setTimeout(() => {
+                            closeRegisterModal();
+                            showLoginModal();
+                        }, 2000);
+                    } else {
+                        errorDiv.textContent =
+                            data.error ||
+                            "Registration failed. Please try again.";
+                        errorDiv.style.display = "block";
+                    }
+                } catch (error) {
+                    console.error("Registration error:", error);
+                    errorDiv.textContent =
+                        "An error occurred. Please try again.";
+                    errorDiv.style.display = "block";
+                }
+            }
+
+            async function doChangeEmail() {
+                const newEmail = document
+                    .getElementById("newEmail")
+                    .value.trim();
+                const errorDiv = document.getElementById("emailChangeError");
+                const successDiv =
+                    document.getElementById("emailChangeSuccess");
+
+                // Hide previous messages
+                errorDiv.style.display = "none";
+                successDiv.style.display = "none";
+
+                // Validate input
+                if (!newEmail) {
+                    errorDiv.textContent = "Please enter an email address";
+                    errorDiv.style.display = "block";
+                    return;
+                }
+
+                // Basic email validation
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(newEmail)) {
+                    errorDiv.textContent = "Please enter a valid email address";
+                    errorDiv.style.display = "block";
+                    return;
+                }
+
+                try {
+                    const response = await fetch("/api/auth/update-email", {
+                        method: "POST",
+                        credentials: "same-origin",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            email: newEmail,
+                        }),
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.success) {
+                        successDiv.textContent = "Email updated successfully!";
+                        successDiv.style.display = "block";
+
+                        // Update current user email
+                        window.currentUser.email = newEmail;
+                        document.getElementById("settingsEmail").textContent =
+                            newEmail;
+
+                        // Clear email field
+                        document.getElementById("newEmail").value = "";
+                    } else {
+                        errorDiv.textContent =
+                            data.error ||
+                            "Failed to update email. Please try again.";
+                        errorDiv.style.display = "block";
+                    }
+                } catch (error) {
+                    console.error("Email update error:", error);
+                    errorDiv.textContent =
+                        "An error occurred. Please try again.";
+                    errorDiv.style.display = "block";
+                }
+            }
+
+            // Initialize login button and check auth status on page load
+            document.addEventListener("DOMContentLoaded", function () {
+                checkAuthStatus();
+            });
+
+            // Also check immediately if DOM is already loaded
+            if (document.readyState === "loading") {
+                document.addEventListener("DOMContentLoaded", function () {
+                    checkAuthStatus();
+                });
+            } else {
+                checkAuthStatus();
+            }
+
+            function closeInfoPanel() {
+                const panel = document.getElementById("infoPanel");
+                const helpBtn = document.getElementById("helpButton");
+                panel.classList.add("hidden");
+                helpBtn.classList.remove("primary");
+                // Remove the opened flag so it stays closed
+                localStorage.removeItem("nagini-help-opened");
+            }
+
+            function showInfoPanel() {
+                const panel = document.getElementById("infoPanel");
+                const helpBtn = document.getElementById("helpButton");
+                panel.classList.remove("hidden");
+                helpBtn.classList.add("primary");
+                // Store that help was opened
+                localStorage.setItem("nagini-help-opened", "true");
+            }
+
+            function toggleInfoPanel() {
+                const panel = document.getElementById("infoPanel");
+                if (panel.classList.contains("hidden")) {
+                    showInfoPanel();
+                } else {
+                    closeInfoPanel();
+                }
+            }
+
+            function closeVariablesPanel() {
+                const panel = document.getElementById("variablesPanel");
+                const variablesBtn = document.getElementById("variablesButton");
+                panel.classList.add("hidden");
+                variablesBtn.classList.remove("primary");
+                localStorage.setItem("nagini-variables-opened", "false");
+            }
+
+            function showVariablesPanel() {
+                const panel = document.getElementById("variablesPanel");
+                const variablesBtn = document.getElementById("variablesButton");
+                panel.classList.remove("hidden");
+                variablesBtn.classList.add("primary");
+                localStorage.setItem("nagini-variables-opened", "true");
+                // Update variables list when panel is shown
+                if (window.app) {
+                    window.app.updateVariablesList();
+                }
+            }
+
+            function toggleVariablesPanel() {
+                const panel = document.getElementById("variablesPanel");
+                if (panel.classList.contains("hidden")) {
+                    showVariablesPanel();
+                } else {
+                    closeVariablesPanel();
+                }
+            }
+
+            function closeMetadataPanel() {
+                const panel = document.getElementById("metadataPanel");
+                const metadataBtn = document.getElementById("metadataButton");
+                panel.classList.add("hidden");
+                metadataBtn.classList.remove("primary");
+                localStorage.setItem("nagini-metadata-opened", "false");
+            }
+
+            function showMetadataPanel() {
+                const panel = document.getElementById("metadataPanel");
+                const metadataBtn = document.getElementById("metadataButton");
+                panel.classList.remove("hidden");
+                metadataBtn.classList.add("primary");
+                localStorage.setItem("nagini-metadata-opened", "true");
+            }
+
+            function toggleMetadataPanel() {
+                const panel = document.getElementById("metadataPanel");
+                if (panel.classList.contains("hidden")) {
+                    showMetadataPanel();
+                } else {
+                    closeMetadataPanel();
+                }
+            }
+
+            function closePreviewPanel() {
+                const panel = document.getElementById("previewPanel");
+                const previewBtn = document.getElementById("previewButton");
+                panel.classList.add("hidden");
+                previewBtn.classList.remove("primary");
+                localStorage.setItem("nagini-preview-opened", "false");
+            }
+
+            function showPreviewPanel() {
+                const panel = document.getElementById("previewPanel");
+                const previewBtn = document.getElementById("previewButton");
+                panel.classList.remove("hidden");
+                previewBtn.classList.add("primary");
+                localStorage.setItem("nagini-preview-opened", "true");
+            }
+
+            function togglePreviewPanel() {
+                const panel = document.getElementById("previewPanel");
+                if (panel.classList.contains("hidden")) {
+                    showPreviewPanel();
+                } else {
+                    closePreviewPanel();
+                }
+            }
+
+            // Preview panel resize functionality
+            let isResizing = false;
+            let startY = 0;
+            let startHeight = 0;
+
+            const previewPanel = document.getElementById("previewPanel");
+            const resizeHandle = document.getElementById("previewResizeHandle");
+
+            if (resizeHandle && previewPanel) {
+                resizeHandle.addEventListener("mousedown", (e) => {
+                    isResizing = true;
+                    startY = e.clientY;
+                    startHeight = previewPanel.offsetHeight;
+                    document.body.style.cursor = "ns-resize";
+                    document.body.style.userSelect = "none";
+                    e.preventDefault();
+                });
+
+                document.addEventListener("mousemove", (e) => {
+                    if (!isResizing) return;
+
+                    const deltaY = startY - e.clientY;
+                    const newHeight = startHeight + deltaY;
+
+                    // Constrain height between min and max
+                    const minHeight = 100;
+                    const maxHeight = window.innerHeight * 0.8;
+                    const constrainedHeight = Math.max(
+                        minHeight,
+                        Math.min(newHeight, maxHeight),
+                    );
+
+                    previewPanel.style.height = constrainedHeight + "px";
+                    localStorage.setItem(
+                        "nagini-preview-height",
+                        constrainedHeight,
+                    );
+                });
+
+                document.addEventListener("mouseup", () => {
+                    if (isResizing) {
+                        isResizing = false;
+                        document.body.style.cursor = "";
+                        document.body.style.userSelect = "";
+                    }
+                });
+
+                // Restore saved height
+                const savedHeight = localStorage.getItem(
+                    "nagini-preview-height",
+                );
+                if (savedHeight) {
+                    previewPanel.style.height = savedHeight + "px";
+                }
+            }
+
+            // Check if user previously opened panels
+            document.addEventListener("DOMContentLoaded", () => {
+                if (localStorage.getItem("nagini-help-opened") === "true") {
+                    const panel = document.getElementById("infoPanel");
+                    const helpBtn = document.getElementById("helpButton");
+                    panel.classList.remove("hidden");
+                    helpBtn.classList.add("primary");
+                }
+                // Show metadata panel by default unless explicitly closed
+                const metadataState = localStorage.getItem(
+                    "nagini-metadata-opened",
+                );
+                const metadataPanel = document.getElementById("metadataPanel");
+                const metadataBtn = document.getElementById("metadataButton");
+
+                if (metadataState === "false") {
+                    // User explicitly closed it
+                    metadataPanel.classList.add("hidden");
+                    metadataBtn.classList.remove("primary");
+                } else {
+                    // Show by default
+                    metadataPanel.classList.remove("hidden");
+                    metadataBtn.classList.add("primary");
+                }
+                // Show preview panel by default unless explicitly closed
+                const previewState = localStorage.getItem(
+                    "nagini-preview-opened",
+                );
+                const previewPanel = document.getElementById("previewPanel");
+                const previewBtn = document.getElementById("previewButton");
+
+                if (previewState === "false") {
+                    // User explicitly closed it
+                    previewPanel.classList.add("hidden");
+                    previewBtn.classList.remove("primary");
+                } else {
+                    // Show by default
+                    previewPanel.classList.remove("hidden");
+                    previewBtn.classList.add("primary");
+                }
+
+                // ESC key handler to close modals
+                document.addEventListener("keydown", (e) => {
+                    if (e.key === "Escape" || e.key === "Esc") {
+                        // Check if Save Modal is open
+                        const saveModal = document.getElementById("saveModal");
+                        if (
+                            saveModal &&
+                            saveModal.classList.contains("active")
+                        ) {
+                            app.closeSaveModal();
+                            return;
+                        }
+
+                        // Check if Load Modal is open
+                        const loadModal = document.getElementById("loadModal");
+                        if (
+                            loadModal &&
+                            loadModal.classList.contains("active")
+                        ) {
+                            app.closeLoadModal();
+                            return;
+                        }
+                    }
+                });
+
+                // Keyboard shortcuts: Ctrl+S for Save, Ctrl+O for Load
+                document.addEventListener("keydown", (e) => {
+                    // Ctrl+S or Cmd+S for Save
+                    if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+                        e.preventDefault();
+                        app.saveComposition();
+                        return;
+                    }
+
+                    // Ctrl+O or Cmd+O for Load
+                    if ((e.ctrlKey || e.metaKey) && e.key === "o") {
+                        e.preventDefault();
+                        app.loadComposition();
+                        return;
+                    }
+
+                    // Alt+P for Preview
+                    if (e.altKey && e.key === "p") {
+                        e.preventDefault();
+                        togglePreviewPanel();
+                        return;
+                    }
+
+                    // Alt+M for Metadata
+                    if (e.altKey && e.key === "m") {
+                        e.preventDefault();
+                        toggleMetadataPanel();
+                        return;
+                    }
+
+                    // Alt+H for Help
+                    if (e.altKey && e.key === "h") {
+                        e.preventDefault();
+                        toggleInfoPanel();
+                        return;
+                    }
+
+                    // Alt+V for Variables
+                    if (e.altKey && e.key === "v") {
+                        e.preventDefault();
+                        toggleVariablesPanel();
+                        return;
+                    }
+                });
+            });
+        </script>
+    </body>
+</html>
