@@ -25,6 +25,9 @@ class NaginiApp {
     this.isPanning = false;
     this.panStart = { x: 0, y: 0 };
     this.panScrollStart = { x: 0, y: 0 };
+    this.zoomLevel = 1;
+    this.minZoom = 0.2;
+    this.maxZoom = 3;
 
     // Load saved variables from localStorage
     this.loadVariables();
@@ -127,9 +130,9 @@ class NaginiApp {
         const containerWidth = canvasContainer.clientWidth;
         const containerHeight = canvasContainer.clientHeight;
 
-        // Start position at center of visible area
-        let baseX = scrollLeft + containerWidth / 2 - 150;
-        let baseY = scrollTop + containerHeight / 2 - 75;
+        // Start position at center of visible area (account for zoom)
+        let baseX = (scrollLeft + containerWidth / 2) / this.zoomLevel - 150;
+        let baseY = (scrollTop + containerHeight / 2) / this.zoomLevel - 75;
 
         // Find non-overlapping position
         const position = this.findNonOverlappingPosition(baseX, baseY);
@@ -196,9 +199,14 @@ class NaginiApp {
       e.preventDefault();
       const blockId = e.dataTransfer.getData("blockId");
       if (blockId) {
-        const rect = canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        const canvasContainer = canvas.parentElement;
+        const containerRect = canvasContainer.getBoundingClientRect();
+        const x =
+          (e.clientX - containerRect.left + canvasContainer.scrollLeft) /
+          this.zoomLevel;
+        const y =
+          (e.clientY - containerRect.top + canvasContainer.scrollTop) /
+          this.zoomLevel;
         this.addNode(blockId, x, y);
       }
     });
@@ -242,6 +250,42 @@ class NaginiApp {
         e.preventDefault();
       }
     });
+
+    // Scroll-wheel zoom with zoom-to-cursor
+    const canvasContainer = canvas.parentElement;
+    canvasContainer.addEventListener(
+      "wheel",
+      (e) => {
+        e.preventDefault();
+
+        const oldZoom = this.zoomLevel;
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        const newZoom = Math.min(
+          this.maxZoom,
+          Math.max(this.minZoom, oldZoom + delta),
+        );
+        if (newZoom === oldZoom) return;
+
+        // Mouse position relative to the container viewport
+        const containerRect = canvasContainer.getBoundingClientRect();
+        const mouseX = e.clientX - containerRect.left;
+        const mouseY = e.clientY - containerRect.top;
+
+        // Canvas coordinate under the mouse cursor (before zoom change)
+        const canvasX = (mouseX + canvasContainer.scrollLeft) / oldZoom;
+        const canvasY = (mouseY + canvasContainer.scrollTop) / oldZoom;
+
+        // Apply zoom
+        this.zoomLevel = newZoom;
+        canvas.style.transform = `scale(${this.zoomLevel})`;
+        this.updateCanvasSize();
+
+        // Adjust scroll so the same canvas point stays under the cursor
+        canvasContainer.scrollLeft = canvasX * newZoom - mouseX;
+        canvasContainer.scrollTop = canvasY * newZoom - mouseY;
+      },
+      { passive: false },
+    );
   }
 
   addNode(blockId, x, y) {
@@ -368,15 +412,20 @@ class NaginiApp {
     this.isDragging = true;
     this.draggedNode = node;
 
-    const nodeElement = document.getElementById(node.id);
-    const rect = nodeElement.getBoundingClientRect();
+    // Calculate offset of mouse within the node in canvas coordinates
     const canvas = document.getElementById("canvas");
-    const canvasRect = canvas.getBoundingClientRect();
+    const canvasContainer = canvas.parentElement;
+    const containerRect = canvasContainer.getBoundingClientRect();
+    const mouseCanvasX =
+      (e.clientX - containerRect.left + canvasContainer.scrollLeft) /
+      this.zoomLevel;
+    const mouseCanvasY =
+      (e.clientY - containerRect.top + canvasContainer.scrollTop) /
+      this.zoomLevel;
 
-    // Calculate offset of mouse within the node
     this.dragOffset = {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
+      x: mouseCanvasX - node.x,
+      y: mouseCanvasY - node.y,
     };
   }
 
@@ -392,10 +441,17 @@ class NaginiApp {
 
     if (this.isDragging && this.draggedNode) {
       const canvas = document.getElementById("canvas");
-      const rect = canvas.getBoundingClientRect();
+      const canvasContainer = canvas.parentElement;
+      const containerRect = canvasContainer.getBoundingClientRect();
 
-      const newX = e.clientX - rect.left - this.dragOffset.x;
-      const newY = e.clientY - rect.top - this.dragOffset.y;
+      const newX =
+        (e.clientX - containerRect.left + canvasContainer.scrollLeft) /
+          this.zoomLevel -
+        this.dragOffset.x;
+      const newY =
+        (e.clientY - containerRect.top + canvasContainer.scrollTop) /
+          this.zoomLevel -
+        this.dragOffset.y;
 
       this.draggedNode.x = Math.max(0, newX);
       this.draggedNode.y = Math.max(0, newY);
@@ -414,8 +470,12 @@ class NaginiApp {
       const containerRect = canvasContainer.getBoundingClientRect();
 
       // Account for scroll position
-      const x = e.clientX - containerRect.left + canvasContainer.scrollLeft;
-      const y = e.clientY - containerRect.top + canvasContainer.scrollTop;
+      const x =
+        (e.clientX - containerRect.left + canvasContainer.scrollLeft) /
+        this.zoomLevel;
+      const y =
+        (e.clientY - containerRect.top + canvasContainer.scrollTop) /
+        this.zoomLevel;
 
       this.tempLine.setAttribute("x2", x);
       this.tempLine.setAttribute("y2", y);
@@ -453,11 +513,13 @@ class NaginiApp {
     const pointRect = outputPoint.getBoundingClientRect();
     const nodeRect = nodeElement.getBoundingClientRect();
 
-    // Calculate position within the canvas coordinate system
+    // Calculate position within the canvas coordinate system (divide screen-space offsets by zoom)
     const startX =
-      node.x + (pointRect.left - nodeRect.left) + pointRect.width / 2;
+      node.x +
+      (pointRect.left - nodeRect.left + pointRect.width / 2) / this.zoomLevel;
     const startY =
-      node.y + (pointRect.top - nodeRect.top) + pointRect.height / 2;
+      node.y +
+      (pointRect.top - nodeRect.top + pointRect.height / 2) / this.zoomLevel;
 
     this.tempLine = document.createElementNS(
       "http://www.w3.org/2000/svg",
@@ -642,8 +704,8 @@ class NaginiApp {
       const nodeElement = document.getElementById(node.id);
       if (nodeElement) {
         const nodeRect = nodeElement.getBoundingClientRect();
-        const nodeRight = node.x + nodeRect.width;
-        const nodeBottom = node.y + nodeRect.height;
+        const nodeRight = node.x + nodeRect.width / this.zoomLevel;
+        const nodeBottom = node.y + nodeRect.height / this.zoomLevel;
 
         maxX = Math.max(maxX, nodeRight);
         maxY = Math.max(maxY, nodeBottom);
@@ -652,19 +714,21 @@ class NaginiApp {
 
     // Add padding to ensure there's space around the nodes
     const padding = 100;
-    const minWidth = canvas.parentElement.clientWidth;
-    const minHeight = canvas.parentElement.clientHeight;
+    const containerWidth = canvas.parentElement.clientWidth;
+    const containerHeight = canvas.parentElement.clientHeight;
+    const minWidth = containerWidth / this.zoomLevel;
+    const minHeight = containerHeight / this.zoomLevel;
 
-    const newWidth = Math.max(minWidth, maxX + padding);
-    const newHeight = Math.max(minHeight, maxY + padding);
+    const logicalWidth = Math.max(minWidth, maxX + padding);
+    const logicalHeight = Math.max(minHeight, maxY + padding);
 
-    canvas.style.width = newWidth + "px";
-    canvas.style.height = newHeight + "px";
+    canvas.style.width = logicalWidth * this.zoomLevel + "px";
+    canvas.style.height = logicalHeight * this.zoomLevel + "px";
 
-    // Update SVG size to match canvas
+    // Update SVG size to match logical canvas size
     if (svg) {
-      svg.style.width = newWidth + "px";
-      svg.style.height = newHeight + "px";
+      svg.style.width = logicalWidth + "px";
+      svg.style.height = logicalHeight + "px";
     }
   }
 
@@ -701,19 +765,23 @@ class NaginiApp {
       const fromNodeRect = fromElement.getBoundingClientRect();
       const toNodeRect = toElement.getBoundingClientRect();
 
-      // Calculate positions within the canvas coordinate system
+      // Calculate positions within the canvas coordinate system (divide screen-space offsets by zoom)
       const x1 =
         fromNode.x +
-        (fromOutputRect.left - fromNodeRect.left) +
-        fromOutputRect.width / 2;
+        (fromOutputRect.left - fromNodeRect.left + fromOutputRect.width / 2) /
+          this.zoomLevel;
       const y1 =
         fromNode.y +
-        (fromOutputRect.top - fromNodeRect.top) +
-        fromOutputRect.height / 2;
+        (fromOutputRect.top - fromNodeRect.top + fromOutputRect.height / 2) /
+          this.zoomLevel;
       const x2 =
-        toNode.x + (toInputRect.left - toNodeRect.left) + toInputRect.width / 2;
+        toNode.x +
+        (toInputRect.left - toNodeRect.left + toInputRect.width / 2) /
+          this.zoomLevel;
       const y2 =
-        toNode.y + (toInputRect.top - toNodeRect.top) + toInputRect.height / 2;
+        toNode.y +
+        (toInputRect.top - toNodeRect.top + toInputRect.height / 2) /
+          this.zoomLevel;
 
       // Create curved path
       const path = document.createElementNS(
