@@ -119,8 +119,9 @@
                 font-weight: bold;
                 color: #4a9eff;
                 display: flex;
-                justify-content: space-between;
+                flex-wrap: wrap;
                 align-items: center;
+                gap: 4px;
             }
 
             .blocks-list {
@@ -172,13 +173,47 @@
                 opacity: 0;
             }
 
-            .block-item:hover .block-edit-icon {
+            .block-item:hover .block-edit-icon,
+            .block-item:hover .block-delete-icon {
                 opacity: 1;
             }
 
             .block-edit-icon:hover {
                 color: #4a9eff;
                 background: rgba(74, 158, 255, 0.1);
+            }
+
+            .block-delete-icon {
+                color: #999;
+                cursor: pointer;
+                padding: 4px 8px;
+                border-radius: 3px;
+                transition: all 0.2s;
+                font-size: 0.9rem;
+                opacity: 0;
+            }
+
+            .block-delete-icon:hover {
+                color: #f44336;
+                background: rgba(244, 67, 54, 0.1);
+            }
+
+            .block-tags {
+                font-size: 0.75rem;
+                color: #888;
+                margin-top: 2px;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+            }
+
+            .block-tag {
+                background: #3a3a3a;
+                border: 1px solid #4a4a4a;
+                border-radius: 3px;
+                padding: 1px 6px;
+                color: #aaa;
+                font-size: 0.7rem;
             }
 
             .block-info {
@@ -203,12 +238,23 @@
                     );
                 background-size: 20px 20px;
                 overflow: auto;
+                cursor: grab;
+            }
+
+            .canvas-container:active {
+                cursor: grabbing;
             }
 
             #canvas {
                 min-width: 100%;
                 min-height: 100%;
                 position: relative;
+                cursor: grab;
+                transform-origin: 0 0;
+            }
+
+            #canvas:active {
+                cursor: grabbing;
             }
 
             /* Node styles */
@@ -455,6 +501,10 @@
             }
 
             #editBlockModal .form-group:nth-child(2) {
+                flex-shrink: 0;
+            }
+
+            #editBlockModal .form-group:nth-child(3) {
                 flex: 1;
                 min-height: 0;
                 margin-bottom: 0;
@@ -462,7 +512,7 @@
                 flex-direction: column;
             }
 
-            #editBlockModal .form-group:nth-child(2) label {
+            #editBlockModal .form-group:nth-child(3) label {
                 flex-shrink: 0;
                 margin-bottom: 8px;
             }
@@ -549,6 +599,37 @@
                 cursor: pointer;
                 border: 1px solid #4a4a4a;
                 transition: all 0.2s;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+
+            .composition-name {
+                flex: 1;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .composition-delete-icon {
+                color: #999;
+                cursor: pointer;
+                padding: 4px 8px;
+                border-radius: 3px;
+                transition: all 0.2s;
+                font-size: 0.9rem;
+                opacity: 0;
+                flex-shrink: 0;
+                margin-left: 8px;
+            }
+
+            .composition-item:hover .composition-delete-icon {
+                opacity: 1;
+            }
+
+            .composition-delete-icon:hover {
+                color: #f44336;
+                background: rgba(244, 67, 54, 0.1);
             }
 
             .composition-item:hover {
@@ -932,8 +1013,8 @@
 
             /* Metadata panel */
             .metadata-panel {
-                position: absolute;
-                top: 10px;
+                position: fixed;
+                top: 60px;
                 right: 10px;
                 background: rgba(42, 42, 42, 0.95);
                 padding: 15px;
@@ -1089,23 +1170,95 @@
                 <!-- Sidebar with blocks -->
                 <div class="sidebar">
                     <div class="sidebar-header">
-                        <div
-                            style="display: flex; align-items: center; gap: 8px"
+                        <label
+                            title="Invert search"
+                            style="
+                                display: flex;
+                                align-items: center;
+                                cursor: pointer;
+                                user-select: none;
+                                color: #999;
+                                font-size: 0.85rem;
+                                font-weight: bold;
+                                gap: 2px;
+                            "
                         >
-                            Available Blocks
-                        </div>
+                            <input
+                                type="checkbox"
+                                id="blockSearchInvert"
+                                onchange="filterBlocksList(document.getElementById('blockSearchInput').value)"
+                                style="
+                                    accent-color: #f44336;
+                                    cursor: pointer;
+                                    margin: 0;
+                                "
+                            />
+                            !
+                        </label>
+                        <input
+                            type="text"
+                            id="blockSearchInput"
+                            placeholder="Search blocks..."
+                            oninput="filterBlocksList(this.value)"
+                            style="
+                                flex: 1;
+                                padding: 6px 10px;
+                                background: #2a2a2a;
+                                border: 1px solid #4a4a4a;
+                                border-radius: 4px;
+                                color: #e0e0e0;
+                                font-size: 0.9rem;
+                                outline: none;
+                            "
+                            onfocus="this.style.borderColor='#4a9eff'"
+                            onblur="this.style.borderColor='#4a4a4a'"
+                        />
+                        <script>
+                            function filterBlocksList(query) {
+                                const blocksList =
+                                    document.getElementById("blocksList");
+                                if (!blocksList) return;
+                                const invert =
+                                    document.getElementById(
+                                        "blockSearchInvert",
+                                    ).checked;
+                                const items =
+                                    blocksList.querySelectorAll(".block-item");
+                                const lowerQuery = query.toLowerCase().trim();
+                                items.forEach(function (item) {
+                                    const nameEl =
+                                        item.querySelector(".block-name");
+                                    const name = nameEl
+                                        ? nameEl.textContent.toLowerCase()
+                                        : "";
+                                    const tags = (
+                                        item.dataset.tags || ""
+                                    ).toLowerCase();
+                                    const found =
+                                        name.includes(lowerQuery) ||
+                                        tags.includes(lowerQuery);
+                                    const matches =
+                                        !lowerQuery ||
+                                        (invert ? !found : found);
+                                    item.style.display = matches ? "" : "none";
+                                });
+                            }
+                        </script>
                         <button
                             id="newBlockButton"
                             class="btn"
                             onclick="app.createNewBlock()"
                             title="Create New Block"
                             style="
-                                padding: 4px 8px;
-                                font-size: 0.85rem;
+                                padding: 2px 8px;
+                                font-size: 1rem;
+                                font-weight: bold;
+                                line-height: 1;
                                 display: none;
+                                width: 100%;
                             "
                         >
-                            New
+                            +
                         </button>
                     </div>
                     <div class="blocks-list" id="blocksList">
@@ -1541,6 +1694,16 @@
                         />
                     </div>
                     <div class="form-group">
+                        <label for="editBlockTags"
+                            >Tags (comma-separated):</label
+                        >
+                        <input
+                            type="text"
+                            id="editBlockTags"
+                            placeholder="e.g. setup, networking, firewall"
+                        />
+                    </div>
+                    <div class="form-group">
                         <label for="editBlockContent">Block Content:</label>
                         <textarea
                             id="editBlockContent"
@@ -1613,6 +1776,66 @@
                     </button>
                     <button class="btn primary" onclick="app.doEditBlock()">
                         Save Changes
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Delete Composition Confirmation Modal -->
+        <div id="deleteCompositionModal" class="modal">
+            <div class="modal-content" style="max-width: 500px">
+                <div class="modal-header">
+                    <h2>Confirm Deletion</h2>
+                    <button
+                        class="modal-close"
+                        onclick="app.closeDeleteCompositionConfirmation()"
+                    >
+                        ×
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p style="margin-bottom: 15px">
+                        Are you sure you want to delete this composition?
+                    </p>
+                    <p
+                        style="
+                            background: rgba(244, 67, 54, 0.1);
+                            border: 1px solid #f44336;
+                            border-radius: 4px;
+                            padding: 10px;
+                            color: #f44336;
+                            margin-bottom: 0;
+                        "
+                    >
+                        <strong>Warning:</strong> This action cannot be undone.
+                        The composition will be permanently deleted.
+                    </p>
+                    <div
+                        id="deleteCompositionError"
+                        style="
+                            display: none;
+                            margin-top: 15px;
+                            padding: 10px;
+                            background: rgba(244, 67, 54, 0.1);
+                            border: 1px solid #f44336;
+                            border-radius: 4px;
+                            color: #f44336;
+                        "
+                    ></div>
+                </div>
+                <div class="modal-footer">
+                    <button
+                        class="btn"
+                        onclick="app.closeDeleteCompositionConfirmation()"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        class="btn"
+                        style="background: #f44336"
+                        onclick="app.doDeleteComposition()"
+                    >
+                        <i class="fas fa-trash"></i> Delete Composition
                     </button>
                 </div>
             </div>

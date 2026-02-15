@@ -22,6 +22,12 @@ class NaginiApp {
     this.hasUnsavedChanges = false;
     this.selectedNode = null;
     this.variables = {}; // Store variable values { "variable_name": "value" }
+    this.isPanning = false;
+    this.panStart = { x: 0, y: 0 };
+    this.panScrollStart = { x: 0, y: 0 };
+    this.zoomLevel = 1;
+    this.minZoom = 0.2;
+    this.maxZoom = 3;
 
     // Load saved variables from localStorage
     this.loadVariables();
@@ -33,6 +39,38 @@ class NaginiApp {
     await this.loadBlocks();
     this.setupEventListeners();
     this.renderBlocks();
+
+    // Check URL for composition parameter and auto-load
+    const params = new URLSearchParams(window.location.search);
+    const compositionName = params.get("composition");
+    if (compositionName) {
+      await this.loadCompositionByName(compositionName);
+    }
+  }
+
+  updateUrlComposition(name) {
+    const url = new URL(window.location);
+    if (name) {
+      url.searchParams.set("composition", name);
+    } else {
+      url.searchParams.delete("composition");
+    }
+    history.replaceState(null, "", url);
+  }
+
+  async loadCompositionByName(name) {
+    try {
+      const response = await fetch("/api/compositions");
+      const compositions = await response.json();
+      const match = compositions.find((c) => c.name === name);
+      if (match) {
+        await this.doLoad(match.id);
+      } else {
+        console.warn(`Composition "${name}" not found`);
+      }
+    } catch (error) {
+      console.error("Error loading composition by name:", error);
+    }
   }
 
   async loadBlocks() {
@@ -84,20 +122,35 @@ class NaginiApp {
       // Check if user is admin to show edit icon
       const isAdmin = window.currentUser && window.currentUser.role === "admin";
       const editIconHtml = isAdmin
-        ? `<span class="block-edit-icon" data-edit-icon="true">E</span>`
+        ? `<span class="block-edit-icon" data-edit-icon="true">E</span><span class="block-delete-icon" data-delete-icon="true">D</span>`
         : "";
+
+      const tagsHtml = block.tags
+        ? `<div class="block-tags">${block.tags
+            .split(",")
+            .map((t) => t.trim())
+            .filter((t) => t)
+            .map((t) => `<span class="block-tag">${t}</span>`)
+            .join("")}</div>`
+        : "";
+
+      blockItem.dataset.tags = block.tags || "";
 
       blockItem.innerHTML = `
                 <div class="block-item-header">
                     <div class="block-name">${block.name}</div>
                     ${editIconHtml}
                 </div>
+                ${tagsHtml}
             `;
 
       // Add click handler to add block to canvas
       blockItem.addEventListener("click", (e) => {
-        // Don't trigger if clicking on edit icon
-        if (e.target.closest(".block-edit-icon")) {
+        // Don't trigger if clicking on edit or delete icon
+        if (
+          e.target.closest(".block-edit-icon") ||
+          e.target.closest(".block-delete-icon")
+        ) {
           return;
         }
 
@@ -109,9 +162,9 @@ class NaginiApp {
         const containerWidth = canvasContainer.clientWidth;
         const containerHeight = canvasContainer.clientHeight;
 
-        // Start position at center of visible area
-        let baseX = scrollLeft + containerWidth / 2 - 150;
-        let baseY = scrollTop + containerHeight / 2 - 75;
+        // Start position at center of visible area (account for zoom)
+        let baseX = (scrollLeft + containerWidth / 2) / this.zoomLevel - 150;
+        let baseY = (scrollTop + containerHeight / 2) / this.zoomLevel - 75;
 
         // Find non-overlapping position
         const position = this.findNonOverlappingPosition(baseX, baseY);
@@ -133,9 +186,27 @@ class NaginiApp {
         }
       }
 
+      // Add delete icon click handler if admin
+      if (isAdmin) {
+        const deleteIcon = blockItem.querySelector(".block-delete-icon");
+        if (deleteIcon) {
+          deleteIcon.addEventListener("click", (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            this.deleteBlockDirect(block.id);
+          });
+          deleteIcon.addEventListener("mousedown", (e) => {
+            e.stopPropagation();
+          });
+        }
+      }
+
       blockItem.addEventListener("dragstart", (e) => {
-        // Prevent drag if clicking on edit icon
-        if (e.target.closest(".block-edit-icon")) {
+        // Prevent drag if clicking on edit or delete icon
+        if (
+          e.target.closest(".block-edit-icon") ||
+          e.target.closest(".block-delete-icon")
+        ) {
           e.preventDefault();
           return false;
         }
@@ -160,9 +231,14 @@ class NaginiApp {
       e.preventDefault();
       const blockId = e.dataTransfer.getData("blockId");
       if (blockId) {
-        const rect = canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        const canvasContainer = canvas.parentElement;
+        const containerRect = canvasContainer.getBoundingClientRect();
+        const x =
+          (e.clientX - containerRect.left + canvasContainer.scrollLeft) /
+          this.zoomLevel;
+        const y =
+          (e.clientY - containerRect.top + canvasContainer.scrollTop) /
+          this.zoomLevel;
         this.addNode(blockId, x, y);
       }
     });
@@ -184,12 +260,67 @@ class NaginiApp {
       }
     });
 
-    // Click on canvas to deselect
-    canvas.addEventListener("click", (e) => {
-      if (e.target === canvas) {
+    // Click on canvas/container to deselect
+    const canvasContainerEl = canvas.parentElement;
+    canvasContainerEl.addEventListener("click", (e) => {
+      if (e.target === canvas || e.target === canvasContainerEl) {
         this.deselectAllNodes();
       }
     });
+
+    // Canvas panning - mousedown on empty space (canvas or container)
+    canvasContainerEl.addEventListener("mousedown", (e) => {
+      if (
+        (e.target === canvas || e.target === canvasContainerEl) &&
+        e.button === 0
+      ) {
+        this.isPanning = true;
+        this.panStart = { x: e.clientX, y: e.clientY };
+        this.panScrollStart = {
+          x: canvasContainerEl.scrollLeft,
+          y: canvasContainerEl.scrollTop,
+        };
+        canvasContainerEl.style.cursor = "grabbing";
+        e.preventDefault();
+      }
+    });
+
+    // Scroll-wheel zoom with zoom-to-cursor
+    const canvasContainer = canvas.parentElement;
+    canvasContainer.addEventListener(
+      "wheel",
+      (e) => {
+        if (!e.ctrlKey) return;
+        e.preventDefault();
+
+        const oldZoom = this.zoomLevel;
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        const newZoom = Math.min(
+          this.maxZoom,
+          Math.max(this.minZoom, oldZoom + delta),
+        );
+        if (newZoom === oldZoom) return;
+
+        // Mouse position relative to the container viewport
+        const containerRect = canvasContainer.getBoundingClientRect();
+        const mouseX = e.clientX - containerRect.left;
+        const mouseY = e.clientY - containerRect.top;
+
+        // Canvas coordinate under the mouse cursor (before zoom change)
+        const canvasX = (mouseX + canvasContainer.scrollLeft) / oldZoom;
+        const canvasY = (mouseY + canvasContainer.scrollTop) / oldZoom;
+
+        // Apply zoom
+        this.zoomLevel = newZoom;
+        canvas.style.transform = `scale(${this.zoomLevel})`;
+        this.updateCanvasSize();
+
+        // Adjust scroll so the same canvas point stays under the cursor
+        canvasContainer.scrollLeft = canvasX * newZoom - mouseX;
+        canvasContainer.scrollTop = canvasY * newZoom - mouseY;
+      },
+      { passive: false },
+    );
   }
 
   addNode(blockId, x, y) {
@@ -316,25 +447,46 @@ class NaginiApp {
     this.isDragging = true;
     this.draggedNode = node;
 
-    const nodeElement = document.getElementById(node.id);
-    const rect = nodeElement.getBoundingClientRect();
+    // Calculate offset of mouse within the node in canvas coordinates
     const canvas = document.getElementById("canvas");
-    const canvasRect = canvas.getBoundingClientRect();
+    const canvasContainer = canvas.parentElement;
+    const containerRect = canvasContainer.getBoundingClientRect();
+    const mouseCanvasX =
+      (e.clientX - containerRect.left + canvasContainer.scrollLeft) /
+      this.zoomLevel;
+    const mouseCanvasY =
+      (e.clientY - containerRect.top + canvasContainer.scrollTop) /
+      this.zoomLevel;
 
-    // Calculate offset of mouse within the node
     this.dragOffset = {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
+      x: mouseCanvasX - node.x,
+      y: mouseCanvasY - node.y,
     };
   }
 
   handleMouseMove(e) {
+    if (this.isPanning) {
+      const dx = e.clientX - this.panStart.x;
+      const dy = e.clientY - this.panStart.y;
+      const canvasContainer = document.querySelector(".canvas-container");
+      canvasContainer.scrollLeft = this.panScrollStart.x - dx;
+      canvasContainer.scrollTop = this.panScrollStart.y - dy;
+      return;
+    }
+
     if (this.isDragging && this.draggedNode) {
       const canvas = document.getElementById("canvas");
-      const rect = canvas.getBoundingClientRect();
+      const canvasContainer = canvas.parentElement;
+      const containerRect = canvasContainer.getBoundingClientRect();
 
-      const newX = e.clientX - rect.left - this.dragOffset.x;
-      const newY = e.clientY - rect.top - this.dragOffset.y;
+      const newX =
+        (e.clientX - containerRect.left + canvasContainer.scrollLeft) /
+          this.zoomLevel -
+        this.dragOffset.x;
+      const newY =
+        (e.clientY - containerRect.top + canvasContainer.scrollTop) /
+          this.zoomLevel -
+        this.dragOffset.y;
 
       this.draggedNode.x = Math.max(0, newX);
       this.draggedNode.y = Math.max(0, newY);
@@ -353,8 +505,12 @@ class NaginiApp {
       const containerRect = canvasContainer.getBoundingClientRect();
 
       // Account for scroll position
-      const x = e.clientX - containerRect.left + canvasContainer.scrollLeft;
-      const y = e.clientY - containerRect.top + canvasContainer.scrollTop;
+      const x =
+        (e.clientX - containerRect.left + canvasContainer.scrollLeft) /
+        this.zoomLevel;
+      const y =
+        (e.clientY - containerRect.top + canvasContainer.scrollTop) /
+        this.zoomLevel;
 
       this.tempLine.setAttribute("x2", x);
       this.tempLine.setAttribute("y2", y);
@@ -362,6 +518,12 @@ class NaginiApp {
   }
 
   handleMouseUp(e) {
+    if (this.isPanning) {
+      this.isPanning = false;
+      const canvasContainer = document.querySelector(".canvas-container");
+      canvasContainer.style.cursor = "";
+    }
+
     if (this.isDragging) {
       this.isDragging = false;
       this.draggedNode = null;
@@ -386,11 +548,13 @@ class NaginiApp {
     const pointRect = outputPoint.getBoundingClientRect();
     const nodeRect = nodeElement.getBoundingClientRect();
 
-    // Calculate position within the canvas coordinate system
+    // Calculate position within the canvas coordinate system (divide screen-space offsets by zoom)
     const startX =
-      node.x + (pointRect.left - nodeRect.left) + pointRect.width / 2;
+      node.x +
+      (pointRect.left - nodeRect.left + pointRect.width / 2) / this.zoomLevel;
     const startY =
-      node.y + (pointRect.top - nodeRect.top) + pointRect.height / 2;
+      node.y +
+      (pointRect.top - nodeRect.top + pointRect.height / 2) / this.zoomLevel;
 
     this.tempLine = document.createElementNS(
       "http://www.w3.org/2000/svg",
@@ -575,8 +739,8 @@ class NaginiApp {
       const nodeElement = document.getElementById(node.id);
       if (nodeElement) {
         const nodeRect = nodeElement.getBoundingClientRect();
-        const nodeRight = node.x + nodeRect.width;
-        const nodeBottom = node.y + nodeRect.height;
+        const nodeRight = node.x + nodeRect.width / this.zoomLevel;
+        const nodeBottom = node.y + nodeRect.height / this.zoomLevel;
 
         maxX = Math.max(maxX, nodeRight);
         maxY = Math.max(maxY, nodeBottom);
@@ -585,19 +749,21 @@ class NaginiApp {
 
     // Add padding to ensure there's space around the nodes
     const padding = 100;
-    const minWidth = canvas.parentElement.clientWidth;
-    const minHeight = canvas.parentElement.clientHeight;
+    const containerWidth = canvas.parentElement.clientWidth;
+    const containerHeight = canvas.parentElement.clientHeight;
+    const minWidth = containerWidth / this.zoomLevel;
+    const minHeight = containerHeight / this.zoomLevel;
 
-    const newWidth = Math.max(minWidth, maxX + padding);
-    const newHeight = Math.max(minHeight, maxY + padding);
+    const logicalWidth = Math.max(minWidth, maxX + padding);
+    const logicalHeight = Math.max(minHeight, maxY + padding);
 
-    canvas.style.width = newWidth + "px";
-    canvas.style.height = newHeight + "px";
+    canvas.style.width = logicalWidth * this.zoomLevel + "px";
+    canvas.style.height = logicalHeight * this.zoomLevel + "px";
 
-    // Update SVG size to match canvas
+    // Update SVG size to match logical canvas size
     if (svg) {
-      svg.style.width = newWidth + "px";
-      svg.style.height = newHeight + "px";
+      svg.style.width = logicalWidth + "px";
+      svg.style.height = logicalHeight + "px";
     }
   }
 
@@ -634,19 +800,23 @@ class NaginiApp {
       const fromNodeRect = fromElement.getBoundingClientRect();
       const toNodeRect = toElement.getBoundingClientRect();
 
-      // Calculate positions within the canvas coordinate system
+      // Calculate positions within the canvas coordinate system (divide screen-space offsets by zoom)
       const x1 =
         fromNode.x +
-        (fromOutputRect.left - fromNodeRect.left) +
-        fromOutputRect.width / 2;
+        (fromOutputRect.left - fromNodeRect.left + fromOutputRect.width / 2) /
+          this.zoomLevel;
       const y1 =
         fromNode.y +
-        (fromOutputRect.top - fromNodeRect.top) +
-        fromOutputRect.height / 2;
+        (fromOutputRect.top - fromNodeRect.top + fromOutputRect.height / 2) /
+          this.zoomLevel;
       const x2 =
-        toNode.x + (toInputRect.left - toNodeRect.left) + toInputRect.width / 2;
+        toNode.x +
+        (toInputRect.left - toNodeRect.left + toInputRect.width / 2) /
+          this.zoomLevel;
       const y2 =
-        toNode.y + (toInputRect.top - toNodeRect.top) + toInputRect.height / 2;
+        toNode.y +
+        (toInputRect.top - toNodeRect.top + toInputRect.height / 2) /
+          this.zoomLevel;
 
       // Create curved path
       const path = document.createElementNS(
@@ -780,6 +950,7 @@ class NaginiApp {
       this.compositionName = "Untitled";
       this.savedCompositionId = null; // Clear saved ID when clearing canvas
       this.publishedScript = null; // Clear published script when clearing canvas
+      this.updateUrlComposition(null);
       this.updateMetadata();
     }
   }
@@ -964,6 +1135,7 @@ class NaginiApp {
         this.compositionName = name;
         this.savedCompositionId = name; // Store the composition ID
         this.hasUnsavedChanges = false;
+        this.updateUrlComposition(name);
         this.updateMetadata();
 
         // Show success message in modal
@@ -1047,12 +1219,35 @@ class NaginiApp {
           });
         };
 
+        const isAdmin =
+          window.currentUser && window.currentUser.role === "admin";
+
         compositions.forEach((comp, index) => {
           const item = document.createElement("div");
           item.className = "composition-item";
-          item.textContent = comp.name;
-          item.onclick = () => this.doLoad(comp.id);
           item.dataset.compId = comp.id;
+
+          const nameSpan = document.createElement("span");
+          nameSpan.className = "composition-name";
+          nameSpan.textContent = comp.name;
+          item.appendChild(nameSpan);
+
+          if (isAdmin) {
+            const deleteIcon = document.createElement("span");
+            deleteIcon.className = "composition-delete-icon";
+            deleteIcon.textContent = "D";
+            deleteIcon.addEventListener("click", (e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              this.deleteCompositionDirect(comp.id);
+            });
+            item.appendChild(deleteIcon);
+          }
+
+          item.onclick = (e) => {
+            if (e.target.closest(".composition-delete-icon")) return;
+            this.doLoad(comp.id);
+          };
           compositionList.appendChild(item);
         });
 
@@ -1131,73 +1326,31 @@ class NaginiApp {
       this.nodes = [];
       this.connections = [];
 
-      // First pass: calculate positions relative to origin (0, 0)
-      const tempPositions = [];
-      let x = 0;
-      let y = 0;
-      let maxHeightInRow = 0;
-      const horizontalSpacing = 350; // Space between nodes horizontally
-      const verticalSpacing = 50; // Extra space between rows
-      const maxWidth = 1400; // Max width before wrapping to new row
-      let minX = 0;
-      let minY = 0;
-      let maxX = 0;
-      let maxY = 0;
+      // === Two-pass layout: render first, measure, then position ===
 
-      // Calculate all positions and find bounds
-      composition.blocks.forEach((blockId, index) => {
+      const horizontalGap = 50; // Gap between nodes horizontally
+      const verticalGap = 40; // Gap between rows vertically
+      const canvasContainer = document.querySelector(".canvas-container");
+      const maxRowWidth = canvasContainer
+        ? canvasContainer.clientWidth - 200
+        : 1200;
+
+      // First pass: create all nodes at (0, 0) to render and measure them
+      const tempNodes = [];
+      composition.blocks.forEach((blockId) => {
         const block = this.blocks.find((b) => b.id === blockId);
         if (!block) {
           console.warn(`Block ${blockId} not found`);
           return;
         }
 
-        tempPositions.push({ x, y, blockId });
-
-        // Estimate node dimensions (will be refined after rendering)
-        const nodeWidth = 300; // Approximate node width
-        const nodeHeight = 150; // Approximate node height
-
-        maxHeightInRow = Math.max(maxHeightInRow, nodeHeight);
-        maxX = Math.max(maxX, x + nodeWidth);
-        maxY = Math.max(maxY, y + nodeHeight);
-
-        // Position next node
-        x += horizontalSpacing;
-        if (x > maxWidth) {
-          x = 0;
-          y += maxHeightInRow + verticalSpacing;
-          maxHeightInRow = 0;
-        }
-      });
-
-      // Calculate centering offset
-      const canvasContainer = document.querySelector(".canvas-container");
-      const viewportWidth = canvasContainer
-        ? canvasContainer.clientWidth
-        : window.innerWidth;
-      const viewportHeight = canvasContainer
-        ? canvasContainer.clientHeight
-        : window.innerHeight;
-
-      const compositionWidth = maxX - minX;
-      const compositionHeight = maxY - minY;
-
-      const offsetX = Math.max(100, (viewportWidth - compositionWidth) / 2);
-      const offsetY = Math.max(100, (viewportHeight - compositionHeight) / 2);
-
-      // Second pass: create nodes with centered positions
-      const prevNode = { id: null };
-      tempPositions.forEach((pos, index) => {
         const nodeId = `node-${this.nextNodeId++}`;
-        const block = this.blocks.find((b) => b.id === pos.blockId);
-
         const node = {
           id: nodeId,
-          blockId: pos.blockId,
+          blockId: blockId,
           blockName: block.name,
-          x: pos.x + offsetX,
-          y: pos.y + offsetY,
+          x: 0,
+          y: 0,
           connections: {
             input: null,
             output: [],
@@ -1206,20 +1359,114 @@ class NaginiApp {
 
         this.nodes.push(node);
         this.renderNode(node);
+        tempNodes.push(node);
+      });
+
+      // Allow the browser to lay out the nodes so we can measure them
+      // Force a reflow by reading a layout property
+      const canvas = document.getElementById("canvas");
+      canvas.offsetHeight;
+
+      // Measure actual node dimensions
+      const nodeSizes = tempNodes.map((node) => {
+        const el = document.getElementById(node.id);
+        return {
+          node,
+          width: el ? el.offsetWidth : 300,
+          height: el ? el.offsetHeight : 150,
+        };
+      });
+
+      // Second pass: calculate positions using actual dimensions
+      // Distribute in rows, wrapping when a row exceeds maxRowWidth
+      const rows = [];
+      let currentRow = [];
+      let currentRowWidth = 0;
+
+      nodeSizes.forEach((entry) => {
+        const neededWidth =
+          currentRow.length > 0 ? entry.width + horizontalGap : entry.width;
+
+        if (
+          currentRow.length > 0 &&
+          currentRowWidth + neededWidth > maxRowWidth
+        ) {
+          // Start a new row
+          rows.push(currentRow);
+          currentRow = [entry];
+          currentRowWidth = entry.width;
+        } else {
+          currentRow.push(entry);
+          currentRowWidth += neededWidth;
+        }
+      });
+      if (currentRow.length > 0) {
+        rows.push(currentRow);
+      }
+
+      // Assign positions row by row
+      let y = 0;
+      let totalWidth = 0;
+      let totalHeight = 0;
+
+      rows.forEach((row) => {
+        let x = 0;
+        let rowMaxHeight = 0;
+
+        row.forEach((entry) => {
+          entry.node.x = x;
+          entry.node.y = y;
+          rowMaxHeight = Math.max(rowMaxHeight, entry.height);
+          x += entry.width + horizontalGap;
+        });
+
+        totalWidth = Math.max(totalWidth, x - horizontalGap);
+        y += rowMaxHeight + verticalGap;
+        totalHeight = y - verticalGap;
+      });
+
+      // Center the layout in the viewport
+      const viewportWidth = canvasContainer
+        ? canvasContainer.clientWidth
+        : window.innerWidth;
+      const viewportHeight = canvasContainer
+        ? canvasContainer.clientHeight
+        : window.innerHeight;
+
+      const offsetX = Math.max(
+        50,
+        (viewportWidth / this.zoomLevel - totalWidth) / 2,
+      );
+      const offsetY = Math.max(
+        50,
+        (viewportHeight / this.zoomLevel - totalHeight) / 2,
+      );
+
+      // Third pass: apply final positions and connect nodes
+      const prevNode = { id: null };
+      tempNodes.forEach((node) => {
+        node.x += offsetX;
+        node.y += offsetY;
+
+        const el = document.getElementById(node.id);
+        if (el) {
+          el.style.left = `${node.x}px`;
+          el.style.top = `${node.y}px`;
+        }
 
         // Connect to previous node
         if (prevNode.id) {
           this.connections.push({
             from: prevNode.id,
-            to: nodeId,
+            to: node.id,
           });
 
           const prevNodeObj = this.nodes.find((n) => n.id === prevNode.id);
-          prevNodeObj.connections.output.push(nodeId);
+          prevNodeObj.connections.output.push(node.id);
           node.connections.input = prevNode.id;
         }
 
-        prevNode.id = nodeId;
+        prevNode.id = node.id;
       });
 
       this.updateConnections();
@@ -1227,6 +1474,7 @@ class NaginiApp {
       this.compositionName = composition.name || compositionId;
       this.savedCompositionId = compositionId; // Store the loaded composition ID
       this.hasUnsavedChanges = false;
+      this.updateUrlComposition(this.compositionName);
       this.updateMetadata();
       this.updateVariablesList(); // Update variables list after loading
       this.autoOpenVariablesPanelIfNeeded(); // Auto-open if variables exist
@@ -1296,6 +1544,7 @@ class NaginiApp {
     this.editBlockHasChanges = false;
     this.editBlockOriginalName = "";
     this.editBlockOriginalContent = "";
+    this.editBlockOriginalTags = "";
 
     // Open modal
     const modal = document.getElementById("editBlockModal");
@@ -1306,8 +1555,10 @@ class NaginiApp {
 
     // Clear form
     const nameInput = document.getElementById("editBlockName");
+    const tagsInput = document.getElementById("editBlockTags");
     const contentInput = document.getElementById("editBlockContent");
     if (nameInput) nameInput.value = "";
+    if (tagsInput) tagsInput.value = "";
     if (contentInput) contentInput.value = "";
 
     // Clear messages
@@ -1334,12 +1585,15 @@ class NaginiApp {
     const trackChanges = () => {
       const currentName = nameInput.value;
       const currentContent = contentInput.value;
+      const currentTags = tagsInput ? tagsInput.value : "";
       this.editBlockHasChanges =
         currentName !== this.editBlockOriginalName ||
-        currentContent !== this.editBlockOriginalContent;
+        currentContent !== this.editBlockOriginalContent ||
+        currentTags !== this.editBlockOriginalTags;
     };
 
     nameInput.oninput = trackChanges;
+    if (tagsInput) tagsInput.oninput = trackChanges;
     contentInput.oninput = trackChanges;
 
     // Reset footer
@@ -1378,6 +1632,7 @@ class NaginiApp {
     this.isCreatingNewBlock = false;
     this.editBlockOriginalName = block.name;
     this.editBlockOriginalContent = block.content;
+    this.editBlockOriginalTags = block.tags || "";
     this.editBlockHasChanges = false;
 
     // Open modal
@@ -1390,8 +1645,10 @@ class NaginiApp {
 
     // Populate fields
     const nameInput = document.getElementById("editBlockName");
+    const tagsInput = document.getElementById("editBlockTags");
     const contentInput = document.getElementById("editBlockContent");
     nameInput.value = block.name;
+    if (tagsInput) tagsInput.value = block.tags || "";
     contentInput.value = block.content;
 
     // Clear any previous messages
@@ -1404,12 +1661,15 @@ class NaginiApp {
     const trackChanges = () => {
       const currentName = nameInput.value;
       const currentContent = contentInput.value;
+      const currentTags = tagsInput ? tagsInput.value : "";
       this.editBlockHasChanges =
         currentName !== this.editBlockOriginalName ||
-        currentContent !== this.editBlockOriginalContent;
+        currentContent !== this.editBlockOriginalContent ||
+        currentTags !== this.editBlockOriginalTags;
     };
 
     nameInput.addEventListener("input", trackChanges);
+    if (tagsInput) tagsInput.addEventListener("input", trackChanges);
     contentInput.addEventListener("input", trackChanges);
 
     // Add keyboard shortcuts
@@ -1433,6 +1693,86 @@ class NaginiApp {
     if (deleteBtn) {
       deleteBtn.style.display = "inline-flex";
     }
+  }
+
+  deleteCompositionDirect(compositionId) {
+    this.deletingCompositionId = compositionId;
+    this.showDeleteCompositionConfirmation();
+  }
+
+  showDeleteCompositionConfirmation() {
+    const modal = document.getElementById("deleteCompositionModal");
+    if (modal) {
+      modal.classList.add("active");
+    }
+    const errorMessage = document.getElementById("deleteCompositionError");
+    if (errorMessage) {
+      errorMessage.style.display = "none";
+    }
+  }
+
+  closeDeleteCompositionConfirmation() {
+    const modal = document.getElementById("deleteCompositionModal");
+    if (modal) {
+      modal.classList.remove("active");
+    }
+  }
+
+  async doDeleteComposition() {
+    if (!this.deletingCompositionId) return;
+
+    try {
+      const response = await fetch(
+        `/api/compositions/${this.deletingCompositionId}`,
+        {
+          method: "DELETE",
+        },
+      );
+
+      if (response.ok) {
+        // Remove the composition item from the list in the modal
+        const compositionList = document.getElementById("compositionList");
+        if (compositionList) {
+          const items = compositionList.querySelectorAll(".composition-item");
+          items.forEach((item) => {
+            if (item.dataset.compId === this.deletingCompositionId) {
+              item.remove();
+            }
+          });
+
+          // Show empty message if no compositions left
+          const remaining =
+            compositionList.querySelectorAll(".composition-item");
+          if (remaining.length === 0) {
+            compositionList.innerHTML =
+              '<div style="padding: 20px; text-align: center; color: #999;">No saved compositions found</div>';
+          }
+        }
+
+        this.closeDeleteCompositionConfirmation();
+      } else {
+        const result = await response.json();
+        const errorMessage = document.getElementById("deleteCompositionError");
+        if (errorMessage) {
+          errorMessage.textContent =
+            result.error || "Failed to delete composition";
+          errorMessage.style.display = "block";
+        }
+      }
+    } catch (error) {
+      console.error("Error deleting composition:", error);
+      const errorMessage = document.getElementById("deleteCompositionError");
+      if (errorMessage) {
+        errorMessage.textContent = "Network error: " + error.message;
+        errorMessage.style.display = "block";
+      }
+    }
+  }
+
+  deleteBlockDirect(blockId) {
+    this.editingBlockId = blockId;
+    this.isCreatingNewBlock = false;
+    this.showDeleteBlockConfirmation();
   }
 
   showDeleteBlockConfirmation() {
@@ -1521,6 +1861,7 @@ class NaginiApp {
     this.editingBlockId = null;
     this.editBlockOriginalName = null;
     this.editBlockOriginalContent = null;
+    this.editBlockOriginalTags = null;
     this.editBlockHasChanges = false;
 
     // Clear messages
@@ -1554,6 +1895,7 @@ class NaginiApp {
 
   async doEditBlock() {
     const name = document.getElementById("editBlockName").value.trim();
+    const tags = (document.getElementById("editBlockTags")?.value || "").trim();
     const content = document.getElementById("editBlockContent").value;
 
     // Validation
@@ -1579,6 +1921,7 @@ class NaginiApp {
           },
           body: JSON.stringify({
             name: name,
+            tags: tags,
             content: btoa(content),
           }),
         });
@@ -1593,6 +1936,7 @@ class NaginiApp {
           },
           body: JSON.stringify({
             name: name,
+            tags: tags,
             content: btoa(content),
           }),
         });
@@ -1609,6 +1953,7 @@ class NaginiApp {
           const block = this.blocks.find((b) => b.id === this.editingBlockId);
           if (block) {
             block.name = name;
+            block.tags = tags;
             block.content = content;
           }
 
@@ -1642,6 +1987,7 @@ class NaginiApp {
         // Reset change tracking since we saved
         this.editBlockHasChanges = false;
         this.editBlockOriginalName = name;
+        this.editBlockOriginalTags = tags;
         this.editBlockOriginalContent = content;
 
         // Change footer to just "Close"

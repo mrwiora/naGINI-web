@@ -129,6 +129,18 @@ func initDB() error {
 		return fmt.Errorf("failed to create scripts checksum index: %w", err)
 	}
 
+	// Add tags column to blocks table if it doesn't exist
+	_, err = db.Exec(`
+		ALTER TABLE blocks ADD COLUMN tags TEXT NOT NULL DEFAULT ''
+	`)
+	if err != nil {
+		// Ignore error if column already exists
+		if !strings.Contains(err.Error(), "duplicate column") {
+			// SQLite returns "duplicate column name" if it already exists
+			// Just log and continue
+		}
+	}
+
 	return nil
 }
 
@@ -139,7 +151,7 @@ func initDB() error {
 // getAllBlocks returns all blocks ordered by order_index
 func getAllBlocks() ([]Block, error) {
 	rows, err := db.Query(`
-		SELECT id, name, content, order_index, created_at, updated_at
+		SELECT id, name, content, tags, order_index, created_at, updated_at
 		FROM blocks
 		ORDER BY order_index, id
 	`)
@@ -157,6 +169,7 @@ func getAllBlocks() ([]Block, error) {
 			&block.ID,
 			&block.Name,
 			&block.Content,
+			&block.Tags,
 			&block.OrderIndex,
 			&createdAt,
 			&updatedAt,
@@ -182,13 +195,14 @@ func getBlockByID(blockID string) (*Block, error) {
 	var createdAt, updatedAt string
 
 	err := db.QueryRow(`
-		SELECT id, name, content, order_index, created_at, updated_at
+		SELECT id, name, content, tags, order_index, created_at, updated_at
 		FROM blocks
 		WHERE id = ?
 	`, blockID).Scan(
 		&block.ID,
 		&block.Name,
 		&block.Content,
+		&block.Tags,
 		&block.OrderIndex,
 		&createdAt,
 		&updatedAt,
@@ -210,11 +224,11 @@ func getBlockByID(blockID string) (*Block, error) {
 }
 
 // createBlock creates a new block
-func createBlock(blockID, name, content string, orderIndex int) (*Block, error) {
+func createBlock(blockID, name, content, tags string, orderIndex int) (*Block, error) {
 	_, err := db.Exec(`
-		INSERT INTO blocks (id, name, content, order_index)
-		VALUES (?, ?, ?, ?)
-	`, blockID, name, content, orderIndex)
+		INSERT INTO blocks (id, name, content, tags, order_index)
+		VALUES (?, ?, ?, ?, ?)
+	`, blockID, name, content, tags, orderIndex)
 
 	if err != nil {
 		return nil, err
@@ -224,7 +238,7 @@ func createBlock(blockID, name, content string, orderIndex int) (*Block, error) 
 }
 
 // updateBlock updates an existing block
-func updateBlock(blockID string, name, content *string, orderIndex *int) (*Block, error) {
+func updateBlock(blockID string, name, content, tags *string, orderIndex *int) (*Block, error) {
 	updates := []string{}
 	args := []interface{}{}
 
@@ -235,6 +249,10 @@ func updateBlock(blockID string, name, content *string, orderIndex *int) (*Block
 	if content != nil {
 		updates = append(updates, "content = ?")
 		args = append(args, *content)
+	}
+	if tags != nil {
+		updates = append(updates, "tags = ?")
+		args = append(args, *tags)
 	}
 	if orderIndex != nil {
 		updates = append(updates, "order_index = ?")
