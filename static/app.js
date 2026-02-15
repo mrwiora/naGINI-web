@@ -87,11 +87,23 @@ class NaginiApp {
         ? `<span class="block-edit-icon" data-edit-icon="true">E</span><span class="block-delete-icon" data-delete-icon="true">D</span>`
         : "";
 
+      const tagsHtml = block.tags
+        ? `<div class="block-tags">${block.tags
+            .split(",")
+            .map((t) => t.trim())
+            .filter((t) => t)
+            .map((t) => `<span class="block-tag">${t}</span>`)
+            .join("")}</div>`
+        : "";
+
+      blockItem.dataset.tags = block.tags || "";
+
       blockItem.innerHTML = `
                 <div class="block-item-header">
                     <div class="block-name">${block.name}</div>
                     ${editIconHtml}
                 </div>
+                ${tagsHtml}
             `;
 
       // Add click handler to add block to canvas
@@ -1317,6 +1329,7 @@ class NaginiApp {
     this.editBlockHasChanges = false;
     this.editBlockOriginalName = "";
     this.editBlockOriginalContent = "";
+    this.editBlockOriginalTags = "";
 
     // Open modal
     const modal = document.getElementById("editBlockModal");
@@ -1327,8 +1340,10 @@ class NaginiApp {
 
     // Clear form
     const nameInput = document.getElementById("editBlockName");
+    const tagsInput = document.getElementById("editBlockTags");
     const contentInput = document.getElementById("editBlockContent");
     if (nameInput) nameInput.value = "";
+    if (tagsInput) tagsInput.value = "";
     if (contentInput) contentInput.value = "";
 
     // Clear messages
@@ -1355,12 +1370,15 @@ class NaginiApp {
     const trackChanges = () => {
       const currentName = nameInput.value;
       const currentContent = contentInput.value;
+      const currentTags = tagsInput ? tagsInput.value : "";
       this.editBlockHasChanges =
         currentName !== this.editBlockOriginalName ||
-        currentContent !== this.editBlockOriginalContent;
+        currentContent !== this.editBlockOriginalContent ||
+        currentTags !== this.editBlockOriginalTags;
     };
 
     nameInput.oninput = trackChanges;
+    if (tagsInput) tagsInput.oninput = trackChanges;
     contentInput.oninput = trackChanges;
 
     // Reset footer
@@ -1399,6 +1417,7 @@ class NaginiApp {
     this.isCreatingNewBlock = false;
     this.editBlockOriginalName = block.name;
     this.editBlockOriginalContent = block.content;
+    this.editBlockOriginalTags = block.tags || "";
     this.editBlockHasChanges = false;
 
     // Open modal
@@ -1411,8 +1430,10 @@ class NaginiApp {
 
     // Populate fields
     const nameInput = document.getElementById("editBlockName");
+    const tagsInput = document.getElementById("editBlockTags");
     const contentInput = document.getElementById("editBlockContent");
     nameInput.value = block.name;
+    if (tagsInput) tagsInput.value = block.tags || "";
     contentInput.value = block.content;
 
     // Clear any previous messages
@@ -1425,12 +1446,15 @@ class NaginiApp {
     const trackChanges = () => {
       const currentName = nameInput.value;
       const currentContent = contentInput.value;
+      const currentTags = tagsInput ? tagsInput.value : "";
       this.editBlockHasChanges =
         currentName !== this.editBlockOriginalName ||
-        currentContent !== this.editBlockOriginalContent;
+        currentContent !== this.editBlockOriginalContent ||
+        currentTags !== this.editBlockOriginalTags;
     };
 
     nameInput.addEventListener("input", trackChanges);
+    if (tagsInput) tagsInput.addEventListener("input", trackChanges);
     contentInput.addEventListener("input", trackChanges);
 
     // Add keyboard shortcuts
@@ -1548,6 +1572,7 @@ class NaginiApp {
     this.editingBlockId = null;
     this.editBlockOriginalName = null;
     this.editBlockOriginalContent = null;
+    this.editBlockOriginalTags = null;
     this.editBlockHasChanges = false;
 
     // Clear messages
@@ -1581,6 +1606,7 @@ class NaginiApp {
 
   async doEditBlock() {
     const name = document.getElementById("editBlockName").value.trim();
+    const tags = (document.getElementById("editBlockTags")?.value || "").trim();
     const content = document.getElementById("editBlockContent").value;
 
     // Validation
@@ -1606,6 +1632,7 @@ class NaginiApp {
           },
           body: JSON.stringify({
             name: name,
+            tags: tags,
             content: btoa(content),
           }),
         });
@@ -1620,6 +1647,7 @@ class NaginiApp {
           },
           body: JSON.stringify({
             name: name,
+            tags: tags,
             content: btoa(content),
           }),
         });
@@ -1636,6 +1664,7 @@ class NaginiApp {
           const block = this.blocks.find((b) => b.id === this.editingBlockId);
           if (block) {
             block.name = name;
+            block.tags = tags;
             block.content = content;
           }
 
@@ -1669,6 +1698,7 @@ class NaginiApp {
         // Reset change tracking since we saved
         this.editBlockHasChanges = false;
         this.editBlockOriginalName = name;
+        this.editBlockOriginalTags = tags;
         this.editBlockOriginalContent = content;
 
         // Change footer to just "Close"

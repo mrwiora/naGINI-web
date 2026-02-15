@@ -43,6 +43,7 @@ type Block struct {
 	ID         string    `json:"id"`
 	Name       string    `json:"name"`
 	Content    string    `json:"content"`
+	Tags       string    `json:"tags"`
 	OrderIndex int       `json:"order_index"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
@@ -350,7 +351,7 @@ func createBlockHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Content is already base64 encoded from frontend
-	createdBlock, err := createBlock(block.ID, block.Name, block.Content, block.OrderIndex)
+	createdBlock, err := createBlock(block.ID, block.Name, block.Content, block.Tags, block.OrderIndex)
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -379,6 +380,7 @@ func updateBlockHandler(w http.ResponseWriter, r *http.Request, blockID string) 
 
 	var name *string
 	var content *string
+	var tags *string
 	var orderIndex *int
 
 	if v, ok := updates["name"].(string); ok {
@@ -388,12 +390,15 @@ func updateBlockHandler(w http.ResponseWriter, r *http.Request, blockID string) 
 		// Content is already base64 encoded from frontend
 		content = &v
 	}
+	if v, ok := updates["tags"].(string); ok {
+		tags = &v
+	}
 	if v, ok := updates["order_index"].(float64); ok {
 		idx := int(v)
 		orderIndex = &idx
 	}
 
-	block, err := updateBlock(blockID, name, content, orderIndex)
+	block, err := updateBlock(blockID, name, content, tags, orderIndex)
 	if err != nil {
 		respondJSON(w, http.StatusNotFound, map[string]string{"error": "Block not found"})
 		return

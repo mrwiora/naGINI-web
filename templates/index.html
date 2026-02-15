@@ -197,6 +197,24 @@
                 background: rgba(244, 67, 54, 0.1);
             }
 
+            .block-tags {
+                font-size: 0.75rem;
+                color: #888;
+                margin-top: 2px;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+            }
+
+            .block-tag {
+                background: #3a3a3a;
+                border: 1px solid #4a4a4a;
+                border-radius: 3px;
+                padding: 1px 6px;
+                color: #aaa;
+                font-size: 0.7rem;
+            }
+
             .block-info {
                 font-size: 0.8rem;
                 color: #999;
@@ -471,6 +489,10 @@
             }
 
             #editBlockModal .form-group:nth-child(2) {
+                flex-shrink: 0;
+            }
+
+            #editBlockModal .form-group:nth-child(3) {
                 flex: 1;
                 min-height: 0;
                 margin-bottom: 0;
@@ -478,7 +500,7 @@
                 flex-direction: column;
             }
 
-            #editBlockModal .form-group:nth-child(2) label {
+            #editBlockModal .form-group:nth-child(3) label {
                 flex-shrink: 0;
                 margin-bottom: 8px;
             }
@@ -1137,10 +1159,14 @@
                                     const name = nameEl
                                         ? nameEl.textContent.toLowerCase()
                                         : "";
-                                    item.style.display =
-                                        !lowerQuery || name.includes(lowerQuery)
-                                            ? ""
-                                            : "none";
+                                    const tags = (
+                                        item.dataset.tags || ""
+                                    ).toLowerCase();
+                                    const matches =
+                                        !lowerQuery ||
+                                        name.includes(lowerQuery) ||
+                                        tags.includes(lowerQuery);
+                                    item.style.display = matches ? "" : "none";
                                 });
                             }
                         </script>
@@ -1588,6 +1614,16 @@
                             type="text"
                             id="editBlockName"
                             placeholder="Block name"
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label for="editBlockTags"
+                            >Tags (comma-separated):</label
+                        >
+                        <input
+                            type="text"
+                            id="editBlockTags"
+                            placeholder="e.g. setup, networking, firewall"
                         />
                     </div>
                     <div class="form-group">
