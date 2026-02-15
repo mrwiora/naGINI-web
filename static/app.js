@@ -39,6 +39,38 @@ class NaginiApp {
     await this.loadBlocks();
     this.setupEventListeners();
     this.renderBlocks();
+
+    // Check URL for composition parameter and auto-load
+    const params = new URLSearchParams(window.location.search);
+    const compositionName = params.get("composition");
+    if (compositionName) {
+      await this.loadCompositionByName(compositionName);
+    }
+  }
+
+  updateUrlComposition(name) {
+    const url = new URL(window.location);
+    if (name) {
+      url.searchParams.set("composition", name);
+    } else {
+      url.searchParams.delete("composition");
+    }
+    history.replaceState(null, "", url);
+  }
+
+  async loadCompositionByName(name) {
+    try {
+      const response = await fetch("/api/compositions");
+      const compositions = await response.json();
+      const match = compositions.find((c) => c.name === name);
+      if (match) {
+        await this.doLoad(match.id);
+      } else {
+        console.warn(`Composition "${name}" not found`);
+      }
+    } catch (error) {
+      console.error("Error loading composition by name:", error);
+    }
   }
 
   async loadBlocks() {
@@ -918,6 +950,7 @@ class NaginiApp {
       this.compositionName = "Untitled";
       this.savedCompositionId = null; // Clear saved ID when clearing canvas
       this.publishedScript = null; // Clear published script when clearing canvas
+      this.updateUrlComposition(null);
       this.updateMetadata();
     }
   }
@@ -1102,6 +1135,7 @@ class NaginiApp {
         this.compositionName = name;
         this.savedCompositionId = name; // Store the composition ID
         this.hasUnsavedChanges = false;
+        this.updateUrlComposition(name);
         this.updateMetadata();
 
         // Show success message in modal
@@ -1440,6 +1474,7 @@ class NaginiApp {
       this.compositionName = composition.name || compositionId;
       this.savedCompositionId = compositionId; // Store the loaded composition ID
       this.hasUnsavedChanges = false;
+      this.updateUrlComposition(this.compositionName);
       this.updateMetadata();
       this.updateVariablesList(); // Update variables list after loading
       this.autoOpenVariablesPanelIfNeeded(); // Auto-open if variables exist
