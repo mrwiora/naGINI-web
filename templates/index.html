@@ -172,13 +172,29 @@
                 opacity: 0;
             }
 
-            .block-item:hover .block-edit-icon {
+            .block-item:hover .block-edit-icon,
+            .block-item:hover .block-delete-icon {
                 opacity: 1;
             }
 
             .block-edit-icon:hover {
                 color: #4a9eff;
                 background: rgba(74, 158, 255, 0.1);
+            }
+
+            .block-delete-icon {
+                color: #999;
+                cursor: pointer;
+                padding: 4px 8px;
+                border-radius: 3px;
+                transition: all 0.2s;
+                font-size: 0.9rem;
+                opacity: 0;
+            }
+
+            .block-delete-icon:hover {
+                color: #f44336;
+                background: rgba(244, 67, 54, 0.1);
             }
 
             .block-info {

@@ -84,7 +84,7 @@ class NaginiApp {
       // Check if user is admin to show edit icon
       const isAdmin = window.currentUser && window.currentUser.role === "admin";
       const editIconHtml = isAdmin
-        ? `<span class="block-edit-icon" data-edit-icon="true">E</span>`
+        ? `<span class="block-edit-icon" data-edit-icon="true">E</span><span class="block-delete-icon" data-delete-icon="true">D</span>`
         : "";
 
       blockItem.innerHTML = `
@@ -96,8 +96,11 @@ class NaginiApp {
 
       // Add click handler to add block to canvas
       blockItem.addEventListener("click", (e) => {
-        // Don't trigger if clicking on edit icon
-        if (e.target.closest(".block-edit-icon")) {
+        // Don't trigger if clicking on edit or delete icon
+        if (
+          e.target.closest(".block-edit-icon") ||
+          e.target.closest(".block-delete-icon")
+        ) {
           return;
         }
 
@@ -133,9 +136,27 @@ class NaginiApp {
         }
       }
 
+      // Add delete icon click handler if admin
+      if (isAdmin) {
+        const deleteIcon = blockItem.querySelector(".block-delete-icon");
+        if (deleteIcon) {
+          deleteIcon.addEventListener("click", (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            this.deleteBlockDirect(block.id);
+          });
+          deleteIcon.addEventListener("mousedown", (e) => {
+            e.stopPropagation();
+          });
+        }
+      }
+
       blockItem.addEventListener("dragstart", (e) => {
-        // Prevent drag if clicking on edit icon
-        if (e.target.closest(".block-edit-icon")) {
+        // Prevent drag if clicking on edit or delete icon
+        if (
+          e.target.closest(".block-edit-icon") ||
+          e.target.closest(".block-delete-icon")
+        ) {
           e.preventDefault();
           return false;
         }
@@ -1433,6 +1454,12 @@ class NaginiApp {
     if (deleteBtn) {
       deleteBtn.style.display = "inline-flex";
     }
+  }
+
+  deleteBlockDirect(blockId) {
+    this.editingBlockId = blockId;
+    this.isCreatingNewBlock = false;
+    this.showDeleteBlockConfirmation();
   }
 
   showDeleteBlockConfirmation() {
