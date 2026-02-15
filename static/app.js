@@ -1185,12 +1185,35 @@ class NaginiApp {
           });
         };
 
+        const isAdmin =
+          window.currentUser && window.currentUser.role === "admin";
+
         compositions.forEach((comp, index) => {
           const item = document.createElement("div");
           item.className = "composition-item";
-          item.textContent = comp.name;
-          item.onclick = () => this.doLoad(comp.id);
           item.dataset.compId = comp.id;
+
+          const nameSpan = document.createElement("span");
+          nameSpan.className = "composition-name";
+          nameSpan.textContent = comp.name;
+          item.appendChild(nameSpan);
+
+          if (isAdmin) {
+            const deleteIcon = document.createElement("span");
+            deleteIcon.className = "composition-delete-icon";
+            deleteIcon.textContent = "D";
+            deleteIcon.addEventListener("click", (e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              this.deleteCompositionDirect(comp.id);
+            });
+            item.appendChild(deleteIcon);
+          }
+
+          item.onclick = (e) => {
+            if (e.target.closest(".composition-delete-icon")) return;
+            this.doLoad(comp.id);
+          };
           compositionList.appendChild(item);
         });
 
@@ -1634,6 +1657,80 @@ class NaginiApp {
     const deleteBtn = document.getElementById("deleteBlockBtn");
     if (deleteBtn) {
       deleteBtn.style.display = "inline-flex";
+    }
+  }
+
+  deleteCompositionDirect(compositionId) {
+    this.deletingCompositionId = compositionId;
+    this.showDeleteCompositionConfirmation();
+  }
+
+  showDeleteCompositionConfirmation() {
+    const modal = document.getElementById("deleteCompositionModal");
+    if (modal) {
+      modal.classList.add("active");
+    }
+    const errorMessage = document.getElementById("deleteCompositionError");
+    if (errorMessage) {
+      errorMessage.style.display = "none";
+    }
+  }
+
+  closeDeleteCompositionConfirmation() {
+    const modal = document.getElementById("deleteCompositionModal");
+    if (modal) {
+      modal.classList.remove("active");
+    }
+  }
+
+  async doDeleteComposition() {
+    if (!this.deletingCompositionId) return;
+
+    try {
+      const response = await fetch(
+        `/api/compositions/${this.deletingCompositionId}`,
+        {
+          method: "DELETE",
+        },
+      );
+
+      if (response.ok) {
+        // Remove the composition item from the list in the modal
+        const compositionList = document.getElementById("compositionList");
+        if (compositionList) {
+          const items = compositionList.querySelectorAll(".composition-item");
+          items.forEach((item) => {
+            if (item.dataset.compId === this.deletingCompositionId) {
+              item.remove();
+            }
+          });
+
+          // Show empty message if no compositions left
+          const remaining =
+            compositionList.querySelectorAll(".composition-item");
+          if (remaining.length === 0) {
+            compositionList.innerHTML =
+              '<div style="padding: 20px; text-align: center; color: #999;">No saved compositions found</div>';
+          }
+        }
+
+        this.closeDeleteCompositionConfirmation();
+      } else {
+        const result = await response.json();
+        const errorMessage = document.getElementById("deleteCompositionError");
+        if (errorMessage) {
+          errorMessage.textContent =
+            result.error || "Failed to delete composition";
+          errorMessage.style.display = "block";
+        }
+      }
+    } catch (error) {
+      console.error("Error deleting composition:", error);
+      const errorMessage = document.getElementById("deleteCompositionError");
+      if (errorMessage) {
+        errorMessage.textContent = "Network error: " + error.message;
+        errorMessage.style.display = "block";
+      }
     }
   }
 

@@ -599,6 +599,37 @@
                 cursor: pointer;
                 border: 1px solid #4a4a4a;
                 transition: all 0.2s;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+
+            .composition-name {
+                flex: 1;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .composition-delete-icon {
+                color: #999;
+                cursor: pointer;
+                padding: 4px 8px;
+                border-radius: 3px;
+                transition: all 0.2s;
+                font-size: 0.9rem;
+                opacity: 0;
+                flex-shrink: 0;
+                margin-left: 8px;
+            }
+
+            .composition-item:hover .composition-delete-icon {
+                opacity: 1;
+            }
+
+            .composition-delete-icon:hover {
+                color: #f44336;
+                background: rgba(244, 67, 54, 0.1);
             }
 
             .composition-item:hover {
@@ -1745,6 +1776,66 @@
                     </button>
                     <button class="btn primary" onclick="app.doEditBlock()">
                         Save Changes
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Delete Composition Confirmation Modal -->
+        <div id="deleteCompositionModal" class="modal">
+            <div class="modal-content" style="max-width: 500px">
+                <div class="modal-header">
+                    <h2>Confirm Deletion</h2>
+                    <button
+                        class="modal-close"
+                        onclick="app.closeDeleteCompositionConfirmation()"
+                    >
+                        ×
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p style="margin-bottom: 15px">
+                        Are you sure you want to delete this composition?
+                    </p>
+                    <p
+                        style="
+                            background: rgba(244, 67, 54, 0.1);
+                            border: 1px solid #f44336;
+                            border-radius: 4px;
+                            padding: 10px;
+                            color: #f44336;
+                            margin-bottom: 0;
+                        "
+                    >
+                        <strong>Warning:</strong> This action cannot be undone.
+                        The composition will be permanently deleted.
+                    </p>
+                    <div
+                        id="deleteCompositionError"
+                        style="
+                            display: none;
+                            margin-top: 15px;
+                            padding: 10px;
+                            background: rgba(244, 67, 54, 0.1);
+                            border: 1px solid #f44336;
+                            border-radius: 4px;
+                            color: #f44336;
+                        "
+                    ></div>
+                </div>
+                <div class="modal-footer">
+                    <button
+                        class="btn"
+                        onclick="app.closeDeleteCompositionConfirmation()"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        class="btn"
+                        style="background: #f44336"
+                        onclick="app.doDeleteComposition()"
+                    >
+                        <i class="fas fa-trash"></i> Delete Composition
                     </button>
                 </div>
             </div>
