@@ -228,25 +228,27 @@ class NaginiApp {
       }
     });
 
-    // Click on canvas to deselect
-    canvas.addEventListener("click", (e) => {
-      if (e.target === canvas) {
+    // Click on canvas/container to deselect
+    const canvasContainerEl = canvas.parentElement;
+    canvasContainerEl.addEventListener("click", (e) => {
+      if (e.target === canvas || e.target === canvasContainerEl) {
         this.deselectAllNodes();
       }
     });
 
-    // Canvas panning - mousedown on empty canvas space
-    canvas.addEventListener("mousedown", (e) => {
-      // Only pan when clicking directly on the canvas (empty space)
-      if (e.target === canvas && e.button === 0) {
+    // Canvas panning - mousedown on empty space (canvas or container)
+    canvasContainerEl.addEventListener("mousedown", (e) => {
+      if (
+        (e.target === canvas || e.target === canvasContainerEl) &&
+        e.button === 0
+      ) {
         this.isPanning = true;
         this.panStart = { x: e.clientX, y: e.clientY };
-        const canvasContainer = canvas.parentElement;
         this.panScrollStart = {
-          x: canvasContainer.scrollLeft,
-          y: canvasContainer.scrollTop,
+          x: canvasContainerEl.scrollLeft,
+          y: canvasContainerEl.scrollTop,
         };
-        canvas.style.cursor = "grabbing";
+        canvasContainerEl.style.cursor = "grabbing";
         e.preventDefault();
       }
     });
@@ -485,8 +487,8 @@ class NaginiApp {
   handleMouseUp(e) {
     if (this.isPanning) {
       this.isPanning = false;
-      const canvas = document.getElementById("canvas");
-      canvas.style.cursor = "";
+      const canvasContainer = document.querySelector(".canvas-container");
+      canvasContainer.style.cursor = "";
     }
 
     if (this.isDragging) {
@@ -1266,73 +1268,31 @@ class NaginiApp {
       this.nodes = [];
       this.connections = [];
 
-      // First pass: calculate positions relative to origin (0, 0)
-      const tempPositions = [];
-      let x = 0;
-      let y = 0;
-      let maxHeightInRow = 0;
-      const horizontalSpacing = 350; // Space between nodes horizontally
-      const verticalSpacing = 50; // Extra space between rows
-      const maxWidth = 1400; // Max width before wrapping to new row
-      let minX = 0;
-      let minY = 0;
-      let maxX = 0;
-      let maxY = 0;
+      // === Two-pass layout: render first, measure, then position ===
 
-      // Calculate all positions and find bounds
-      composition.blocks.forEach((blockId, index) => {
+      const horizontalGap = 50; // Gap between nodes horizontally
+      const verticalGap = 40; // Gap between rows vertically
+      const canvasContainer = document.querySelector(".canvas-container");
+      const maxRowWidth = canvasContainer
+        ? canvasContainer.clientWidth - 200
+        : 1200;
+
+      // First pass: create all nodes at (0, 0) to render and measure them
+      const tempNodes = [];
+      composition.blocks.forEach((blockId) => {
         const block = this.blocks.find((b) => b.id === blockId);
         if (!block) {
           console.warn(`Block ${blockId} not found`);
           return;
         }
 
-        tempPositions.push({ x, y, blockId });
-
-        // Estimate node dimensions (will be refined after rendering)
-        const nodeWidth = 300; // Approximate node width
-        const nodeHeight = 150; // Approximate node height
-
-        maxHeightInRow = Math.max(maxHeightInRow, nodeHeight);
-        maxX = Math.max(maxX, x + nodeWidth);
-        maxY = Math.max(maxY, y + nodeHeight);
-
-        // Position next node
-        x += horizontalSpacing;
-        if (x > maxWidth) {
-          x = 0;
-          y += maxHeightInRow + verticalSpacing;
-          maxHeightInRow = 0;
-        }
-      });
-
-      // Calculate centering offset
-      const canvasContainer = document.querySelector(".canvas-container");
-      const viewportWidth = canvasContainer
-        ? canvasContainer.clientWidth
-        : window.innerWidth;
-      const viewportHeight = canvasContainer
-        ? canvasContainer.clientHeight
-        : window.innerHeight;
-
-      const compositionWidth = maxX - minX;
-      const compositionHeight = maxY - minY;
-
-      const offsetX = Math.max(100, (viewportWidth - compositionWidth) / 2);
-      const offsetY = Math.max(100, (viewportHeight - compositionHeight) / 2);
-
-      // Second pass: create nodes with centered positions
-      const prevNode = { id: null };
-      tempPositions.forEach((pos, index) => {
         const nodeId = `node-${this.nextNodeId++}`;
-        const block = this.blocks.find((b) => b.id === pos.blockId);
-
         const node = {
           id: nodeId,
-          blockId: pos.blockId,
+          blockId: blockId,
           blockName: block.name,
-          x: pos.x + offsetX,
-          y: pos.y + offsetY,
+          x: 0,
+          y: 0,
           connections: {
             input: null,
             output: [],
@@ -1341,20 +1301,114 @@ class NaginiApp {
 
         this.nodes.push(node);
         this.renderNode(node);
+        tempNodes.push(node);
+      });
+
+      // Allow the browser to lay out the nodes so we can measure them
+      // Force a reflow by reading a layout property
+      const canvas = document.getElementById("canvas");
+      canvas.offsetHeight;
+
+      // Measure actual node dimensions
+      const nodeSizes = tempNodes.map((node) => {
+        const el = document.getElementById(node.id);
+        return {
+          node,
+          width: el ? el.offsetWidth : 300,
+          height: el ? el.offsetHeight : 150,
+        };
+      });
+
+      // Second pass: calculate positions using actual dimensions
+      // Distribute in rows, wrapping when a row exceeds maxRowWidth
+      const rows = [];
+      let currentRow = [];
+      let currentRowWidth = 0;
+
+      nodeSizes.forEach((entry) => {
+        const neededWidth =
+          currentRow.length > 0 ? entry.width + horizontalGap : entry.width;
+
+        if (
+          currentRow.length > 0 &&
+          currentRowWidth + neededWidth > maxRowWidth
+        ) {
+          // Start a new row
+          rows.push(currentRow);
+          currentRow = [entry];
+          currentRowWidth = entry.width;
+        } else {
+          currentRow.push(entry);
+          currentRowWidth += neededWidth;
+        }
+      });
+      if (currentRow.length > 0) {
+        rows.push(currentRow);
+      }
+
+      // Assign positions row by row
+      let y = 0;
+      let totalWidth = 0;
+      let totalHeight = 0;
+
+      rows.forEach((row) => {
+        let x = 0;
+        let rowMaxHeight = 0;
+
+        row.forEach((entry) => {
+          entry.node.x = x;
+          entry.node.y = y;
+          rowMaxHeight = Math.max(rowMaxHeight, entry.height);
+          x += entry.width + horizontalGap;
+        });
+
+        totalWidth = Math.max(totalWidth, x - horizontalGap);
+        y += rowMaxHeight + verticalGap;
+        totalHeight = y - verticalGap;
+      });
+
+      // Center the layout in the viewport
+      const viewportWidth = canvasContainer
+        ? canvasContainer.clientWidth
+        : window.innerWidth;
+      const viewportHeight = canvasContainer
+        ? canvasContainer.clientHeight
+        : window.innerHeight;
+
+      const offsetX = Math.max(
+        50,
+        (viewportWidth / this.zoomLevel - totalWidth) / 2,
+      );
+      const offsetY = Math.max(
+        50,
+        (viewportHeight / this.zoomLevel - totalHeight) / 2,
+      );
+
+      // Third pass: apply final positions and connect nodes
+      const prevNode = { id: null };
+      tempNodes.forEach((node) => {
+        node.x += offsetX;
+        node.y += offsetY;
+
+        const el = document.getElementById(node.id);
+        if (el) {
+          el.style.left = `${node.x}px`;
+          el.style.top = `${node.y}px`;
+        }
 
         // Connect to previous node
         if (prevNode.id) {
           this.connections.push({
             from: prevNode.id,
-            to: nodeId,
+            to: node.id,
           });
 
           const prevNodeObj = this.nodes.find((n) => n.id === prevNode.id);
-          prevNodeObj.connections.output.push(nodeId);
+          prevNodeObj.connections.output.push(node.id);
           node.connections.input = prevNode.id;
         }
 
-        prevNode.id = nodeId;
+        prevNode.id = node.id;
       });
 
       this.updateConnections();
