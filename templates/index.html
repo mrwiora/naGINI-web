@@ -1089,11 +1089,45 @@
                 <!-- Sidebar with blocks -->
                 <div class="sidebar">
                     <div class="sidebar-header">
-                        <div
-                            style="display: flex; align-items: center; gap: 8px"
-                        >
-                            Available Blocks
-                        </div>
+                        <input
+                            type="text"
+                            id="blockSearchInput"
+                            placeholder="Search blocks..."
+                            oninput="filterBlocksList(this.value)"
+                            style="
+                                flex: 1;
+                                padding: 6px 10px;
+                                background: #2a2a2a;
+                                border: 1px solid #4a4a4a;
+                                border-radius: 4px;
+                                color: #e0e0e0;
+                                font-size: 0.9rem;
+                                outline: none;
+                            "
+                            onfocus="this.style.borderColor='#4a9eff'"
+                            onblur="this.style.borderColor='#4a4a4a'"
+                        />
+                        <script>
+                            function filterBlocksList(query) {
+                                const blocksList =
+                                    document.getElementById("blocksList");
+                                if (!blocksList) return;
+                                const items =
+                                    blocksList.querySelectorAll(".block-item");
+                                const lowerQuery = query.toLowerCase().trim();
+                                items.forEach(function (item) {
+                                    const nameEl =
+                                        item.querySelector(".block-name");
+                                    const name = nameEl
+                                        ? nameEl.textContent.toLowerCase()
+                                        : "";
+                                    item.style.display =
+                                        !lowerQuery || name.includes(lowerQuery)
+                                            ? ""
+                                            : "none";
+                                });
+                            }
+                        </script>
                         <button
                             id="newBlockButton"
                             class="btn"
