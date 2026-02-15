@@ -258,6 +258,7 @@ class NaginiApp {
     canvasContainer.addEventListener(
       "wheel",
       (e) => {
+        if (!e.ctrlKey) return;
         e.preventDefault();
 
         const oldZoom = this.zoomLevel;
