@@ -119,8 +119,9 @@
                 font-weight: bold;
                 color: #4a9eff;
                 display: flex;
-                justify-content: space-between;
+                flex-wrap: wrap;
                 align-items: center;
+                gap: 4px;
             }
 
             .blocks-list {
@@ -1127,6 +1128,31 @@
                 <!-- Sidebar with blocks -->
                 <div class="sidebar">
                     <div class="sidebar-header">
+                        <label
+                            title="Invert search"
+                            style="
+                                display: flex;
+                                align-items: center;
+                                cursor: pointer;
+                                user-select: none;
+                                color: #999;
+                                font-size: 0.85rem;
+                                font-weight: bold;
+                                gap: 2px;
+                            "
+                        >
+                            <input
+                                type="checkbox"
+                                id="blockSearchInvert"
+                                onchange="filterBlocksList(document.getElementById('blockSearchInput').value)"
+                                style="
+                                    accent-color: #f44336;
+                                    cursor: pointer;
+                                    margin: 0;
+                                "
+                            />
+                            !
+                        </label>
                         <input
                             type="text"
                             id="blockSearchInput"
@@ -1150,6 +1176,10 @@
                                 const blocksList =
                                     document.getElementById("blocksList");
                                 if (!blocksList) return;
+                                const invert =
+                                    document.getElementById(
+                                        "blockSearchInvert",
+                                    ).checked;
                                 const items =
                                     blocksList.querySelectorAll(".block-item");
                                 const lowerQuery = query.toLowerCase().trim();
@@ -1162,10 +1192,12 @@
                                     const tags = (
                                         item.dataset.tags || ""
                                     ).toLowerCase();
-                                    const matches =
-                                        !lowerQuery ||
+                                    const found =
                                         name.includes(lowerQuery) ||
                                         tags.includes(lowerQuery);
+                                    const matches =
+                                        !lowerQuery ||
+                                        (invert ? !found : found);
                                     item.style.display = matches ? "" : "none";
                                 });
                             }
@@ -1176,12 +1208,15 @@
                             onclick="app.createNewBlock()"
                             title="Create New Block"
                             style="
-                                padding: 4px 8px;
-                                font-size: 0.85rem;
+                                padding: 2px 8px;
+                                font-size: 1rem;
+                                font-weight: bold;
+                                line-height: 1;
                                 display: none;
+                                width: 100%;
                             "
                         >
-                            New
+                            +
                         </button>
                     </div>
                     <div class="blocks-list" id="blocksList">
