@@ -22,6 +22,9 @@ class NaginiApp {
     this.hasUnsavedChanges = false;
     this.selectedNode = null;
     this.variables = {}; // Store variable values { "variable_name": "value" }
+    this.isPanning = false;
+    this.panStart = { x: 0, y: 0 };
+    this.panScrollStart = { x: 0, y: 0 };
 
     // Load saved variables from localStorage
     this.loadVariables();
@@ -223,6 +226,22 @@ class NaginiApp {
         this.deselectAllNodes();
       }
     });
+
+    // Canvas panning - mousedown on empty canvas space
+    canvas.addEventListener("mousedown", (e) => {
+      // Only pan when clicking directly on the canvas (empty space)
+      if (e.target === canvas && e.button === 0) {
+        this.isPanning = true;
+        this.panStart = { x: e.clientX, y: e.clientY };
+        const canvasContainer = canvas.parentElement;
+        this.panScrollStart = {
+          x: canvasContainer.scrollLeft,
+          y: canvasContainer.scrollTop,
+        };
+        canvas.style.cursor = "grabbing";
+        e.preventDefault();
+      }
+    });
   }
 
   addNode(blockId, x, y) {
@@ -362,6 +381,15 @@ class NaginiApp {
   }
 
   handleMouseMove(e) {
+    if (this.isPanning) {
+      const dx = e.clientX - this.panStart.x;
+      const dy = e.clientY - this.panStart.y;
+      const canvasContainer = document.querySelector(".canvas-container");
+      canvasContainer.scrollLeft = this.panScrollStart.x - dx;
+      canvasContainer.scrollTop = this.panScrollStart.y - dy;
+      return;
+    }
+
     if (this.isDragging && this.draggedNode) {
       const canvas = document.getElementById("canvas");
       const rect = canvas.getBoundingClientRect();
@@ -395,6 +423,12 @@ class NaginiApp {
   }
 
   handleMouseUp(e) {
+    if (this.isPanning) {
+      this.isPanning = false;
+      const canvas = document.getElementById("canvas");
+      canvas.style.cursor = "";
+    }
+
     if (this.isDragging) {
       this.isDragging = false;
       this.draggedNode = null;
