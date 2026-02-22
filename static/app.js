@@ -2630,6 +2630,25 @@ class NaginiApp {
 
     // Store URL for copying
     this.compositionUrl = result.full_url;
+
+    // Auto-copy URL to clipboard
+    navigator.clipboard
+      .writeText(result.full_url)
+      .then(() => {
+        const copyButton = document.querySelector(
+          '#urlSection button[onclick="app.copyCompositionUrl()"]',
+        );
+        if (copyButton) {
+          const originalHTML = copyButton.innerHTML;
+          copyButton.innerHTML = "✓";
+          setTimeout(() => {
+            copyButton.innerHTML = originalHTML;
+          }, 1000);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to auto-copy URL:", err);
+      });
   }
 
   // Auto-open variables panel if variables are detected
