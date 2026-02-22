@@ -1543,19 +1543,70 @@
                         ></div>
                         <div class="preview-panel-header">
                             <h3>Script Preview</h3>
-                            <button
-                                class="preview-panel-close"
-                                onclick="closePreviewPanel()"
-                                title="Close preview"
+                            <div
+                                style="
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 8px;
+                                "
                             >
-                                ×
-                            </button>
+                                <button
+                                    id="previewCopyButton"
+                                    class="btn"
+                                    onclick="copyPreviewContent()"
+                                    title="Copy script to clipboard"
+                                    style="padding: 4px 8px; font-size: 0.85rem"
+                                >
+                                    Copy
+                                </button>
+                                <button
+                                    class="preview-panel-close"
+                                    onclick="closePreviewPanel()"
+                                    title="Close preview"
+                                >
+                                    ×
+                                </button>
+                            </div>
                         </div>
                         <div id="previewContent" class="preview-content empty">
                             No connected blocks to preview
                         </div>
                         <div class="preview-stats" id="previewStats"></div>
                     </div>
+                    <script>
+                        function copyPreviewContent() {
+                            const previewContent =
+                                document.getElementById("previewContent");
+                            if (
+                                !previewContent ||
+                                previewContent.classList.contains("empty")
+                            ) {
+                                return;
+                            }
+                            const text = previewContent.textContent;
+                            navigator.clipboard
+                                .writeText(text)
+                                .then(() => {
+                                    const btn =
+                                        document.getElementById(
+                                            "previewCopyButton",
+                                        );
+                                    if (btn) {
+                                        const original = btn.innerHTML;
+                                        btn.innerHTML = "✓";
+                                        setTimeout(() => {
+                                            btn.innerHTML = original;
+                                        }, 1000);
+                                    }
+                                })
+                                .catch((err) => {
+                                    console.error(
+                                        "Failed to copy script preview:",
+                                        err,
+                                    );
+                                });
+                        }
+                    </script>
 
                     <!-- Info panel -->
                     <div class="info-panel hidden" id="infoPanel">
