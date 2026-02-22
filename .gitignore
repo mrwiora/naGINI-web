@@ -3,3 +3,6 @@ nagini-web
 
 # embedded minified files
 embedded/
+
+# data
+nagini.db
