@@ -6,13 +6,20 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const dbPath = "nagini.db"
+var dbPath = "nagini.db"
+
+func init() {
+	if p := os.Getenv("NAGINI_DBPATH"); p != "" {
+		dbPath = p
+	}
+}
 
 // initDB initializes the database and creates tables if they don't exist
 func initDB() error {
