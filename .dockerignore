@@ -1,0 +1,11 @@
+nagini-web
+nagini.db
+embedded/
+.git
+.gitignore
+*.md
+LICENSE
+MAINTAINERS
+docker-compose.yml
+Dockerfile
+test/

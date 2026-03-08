@@ -1,0 +1,12 @@
+services:
+  nagini-web:
+    image: mrwiora/nagini-web:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - NAGINI_LISTENADDRESS=0.0.0.0
+      - NAGINI_LISTENPORT=8080
+      - NAGINI_DBPATH=data/nagini.db
+    restart: unless-stopped
