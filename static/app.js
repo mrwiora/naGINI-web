@@ -2056,6 +2056,12 @@ class NaginiApp {
       "publishStatusSection",
     );
 
+    const naginiParamsSection = document.getElementById(
+      "naginiParametersSection",
+    );
+    const publishedPassphraseSection =
+      document.getElementById("passphraseSection");
+
     if (this.nodes.length === 0) {
       // Show empty state, hide all metadata sections
       if (emptyStateMessage) emptyStateMessage.style.display = "block";
@@ -2066,6 +2072,9 @@ class NaginiApp {
       if (variablesStatusSection) variablesStatusSection.style.display = "none";
       if (publishButtonSection) publishButtonSection.style.display = "none";
       if (publishStatusSection) publishStatusSection.style.display = "none";
+      if (naginiParamsSection) naginiParamsSection.style.display = "none";
+      if (publishedPassphraseSection)
+        publishedPassphraseSection.style.display = "none";
       return;
     }
 
@@ -2196,9 +2205,12 @@ class NaginiApp {
       this.validatePublishPassphrase();
     }
 
-    // Hide SHA256/URL sections - they only appear after publishing
+    // Hide SHA256/URL/passphrase/naGINI params sections - they only appear after publishing
     if (sha256Section) sha256Section.style.display = "none";
     if (urlSection) urlSection.style.display = "none";
+    if (naginiParamsSection) naginiParamsSection.style.display = "none";
+    if (publishedPassphraseSection)
+      publishedPassphraseSection.style.display = "none";
 
     // Check if we have a published script to display
     if (this.publishedScript) {
