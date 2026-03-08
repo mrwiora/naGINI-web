@@ -2228,7 +2228,9 @@ class NaginiApp {
       .writeText(this.compositionUrl)
       .then(() => {
         // Show temporary feedback
-        const copyButton = event.target.closest("button");
+        const copyButton = document.querySelector(
+          '#urlSection button[onclick="app.copyCompositionUrl()"]',
+        );
         if (copyButton) {
           const originalHTML = copyButton.innerHTML;
           copyButton.innerHTML = "✓";
