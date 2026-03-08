@@ -2492,7 +2492,43 @@ class NaginiApp {
     publishButton.disabled = false;
   }
 
+  generatePassphraseAndPublish() {
+    this.passphraseWasGenerated = true;
+    const charset =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    const length = 16;
+    const randomValues = new Uint32Array(length);
+    crypto.getRandomValues(randomValues);
+    let passphrase = "";
+    for (let i = 0; i < length; i++) {
+      passphrase += charset[randomValues[i] % charset.length];
+    }
+
+    const passphraseInput = document.getElementById("publishPassphrase");
+    const confirmInput = document.getElementById("publishPassphraseConfirm");
+
+    if (!passphraseInput || !confirmInput) {
+      console.error("Passphrase fields not found");
+      return;
+    }
+
+    // Fill both fields with the generated passphrase
+    passphraseInput.value = passphrase;
+    confirmInput.value = passphrase;
+
+    // Validate to enable the publish button
+    this.validatePublishPassphrase();
+
+    // Trigger publish
+    this.publishComposition();
+  }
+
   async publishComposition() {
+    // If not triggered by generatePassphraseAndPublish, mark as manual
+    if (!this.passphraseWasGenerated) {
+      this.passphraseWasGenerated = false;
+    }
+
     // Final validation check
     const prerequisites = this.checkPublishPrerequisites();
 
@@ -2569,6 +2605,9 @@ class NaginiApp {
         // Store published script info
         this.publishedScript = result;
 
+        // Store passphrase for naGINI parameters display
+        this.publishedPassphrase = passphrase;
+
         // Hide passphrase section and publish button
         const passphraseSection = document.getElementById(
           "encryptionPassphraseSection",
@@ -2631,12 +2670,67 @@ class NaginiApp {
     // Store URL for copying
     this.compositionUrl = result.full_url;
 
-    // Auto-copy URL to clipboard
+    // Show naGINI parameters section
+    const naginiParamsSection = document.getElementById(
+      "naginiParametersSection",
+    );
+    if (naginiParamsSection) naginiParamsSection.style.display = "block";
+    const naginiParamsDisplay = document.getElementById("naginiParameters");
+    if (naginiParamsDisplay) {
+      const displayPassphrase = this.passphraseWasGenerated
+        ? this.publishedPassphrase || ""
+        : "{{your-passphrase}}";
+      const naginiParamsText = `-url ${result.full_url} -passphrase "${displayPassphrase}"`;
+      naginiParamsDisplay.textContent = naginiParamsText;
+      this.naginiParameters = naginiParamsText;
+
+      // Auto-copy naGINI parameters to clipboard
+      navigator.clipboard
+        .writeText(naginiParamsText)
+        .then(() => {
+          const copyButton = document.querySelector(
+            '#naginiParametersSection button[onclick="app.copyNaginiParameters()"]',
+          );
+          if (copyButton) {
+            const originalHTML = copyButton.innerHTML;
+            copyButton.innerHTML = "✓";
+            setTimeout(() => {
+              copyButton.innerHTML = originalHTML;
+            }, 1000);
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to auto-copy naGINI parameters:", err);
+        });
+    }
+
+    // Show Passphrase section
+    const passphraseSection = document.getElementById("passphraseSection");
+    if (passphraseSection) passphraseSection.style.display = "block";
+    const passphraseDisplay = document.getElementById("compositionPassphrase");
+    if (passphraseDisplay) {
+      if (this.passphraseWasGenerated) {
+        passphraseDisplay.textContent = this.publishedPassphrase || "";
+      } else {
+        passphraseDisplay.textContent = "{{your-passphrase}}";
+      }
+    }
+
+    // Reset the flag after displaying
+    this.passphraseWasGenerated = false;
+  }
+
+  copyNaginiParameters() {
+    if (!this.naginiParameters) {
+      console.error("No naGINI parameters available");
+      return;
+    }
+
     navigator.clipboard
-      .writeText(result.full_url)
+      .writeText(this.naginiParameters)
       .then(() => {
         const copyButton = document.querySelector(
-          '#urlSection button[onclick="app.copyCompositionUrl()"]',
+          '#naginiParametersSection button[onclick="app.copyNaginiParameters()"]',
         );
         if (copyButton) {
           const originalHTML = copyButton.innerHTML;
@@ -2647,7 +2741,32 @@ class NaginiApp {
         }
       })
       .catch((err) => {
-        console.error("Failed to auto-copy URL:", err);
+        console.error("Failed to copy naGINI parameters:", err);
+      });
+  }
+
+  copyCompositionPassphrase() {
+    if (!this.publishedPassphrase) {
+      console.error("No passphrase available");
+      return;
+    }
+
+    navigator.clipboard
+      .writeText(this.publishedPassphrase)
+      .then(() => {
+        const copyButton = document.querySelector(
+          '#passphraseSection button[onclick="app.copyCompositionPassphrase()"]',
+        );
+        if (copyButton) {
+          const originalHTML = copyButton.innerHTML;
+          copyButton.innerHTML = "✓";
+          setTimeout(() => {
+            copyButton.innerHTML = originalHTML;
+          }, 1000);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to copy passphrase:", err);
       });
   }
 

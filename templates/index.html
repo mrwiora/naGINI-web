@@ -1401,8 +1401,23 @@
                             id="encryptionPassphraseSection"
                             style="display: none"
                         >
-                            <div class="metadata-label">
-                                🔒 Encryption Passphrase:
+                            <div
+                                class="metadata-label"
+                                style="
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: space-between;
+                                "
+                            >
+                                <span>🔒 Encryption Passphrase:</span>
+                                <button
+                                    class="btn"
+                                    onclick="app.generatePassphraseAndPublish()"
+                                    title="Generate a random 16-character passphrase and auto-publish"
+                                    style="padding: 2px 8px; font-size: 0.75rem"
+                                >
+                                    🎲 Generate &amp; Publish
+                                </button>
                             </div>
                             <div style="margin-top: 8px">
                                 <input
@@ -1527,6 +1542,76 @@
                                     class="btn"
                                     onclick="app.copyCompositionUrl()"
                                     title="Copy URL"
+                                    style="padding: 4px 8px; font-size: 0.85rem"
+                                >
+                                    Copy
+                                </button>
+                            </div>
+                        </div>
+                        <div
+                            class="metadata-item"
+                            id="passphraseSection"
+                            style="display: none"
+                        >
+                            <div class="metadata-label">Passphrase:</div>
+                            <div
+                                class="metadata-value"
+                                style="
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 8px;
+                                "
+                            >
+                                <span
+                                    id="compositionPassphrase"
+                                    style="
+                                        flex: 1;
+                                        overflow: hidden;
+                                        text-overflow: ellipsis;
+                                        white-space: nowrap;
+                                        font-family: monospace;
+                                        font-size: 0.85rem;
+                                    "
+                                ></span>
+                                <button
+                                    class="btn"
+                                    onclick="app.copyCompositionPassphrase()"
+                                    title="Copy Passphrase"
+                                    style="padding: 4px 8px; font-size: 0.85rem"
+                                >
+                                    Copy
+                                </button>
+                            </div>
+                        </div>
+                        <div
+                            class="metadata-item"
+                            id="naginiParametersSection"
+                            style="display: none"
+                        >
+                            <div class="metadata-label">naGINI parameters:</div>
+                            <div
+                                class="metadata-value"
+                                style="
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 8px;
+                                "
+                            >
+                                <span
+                                    id="naginiParameters"
+                                    style="
+                                        flex: 1;
+                                        overflow: hidden;
+                                        text-overflow: ellipsis;
+                                        white-space: nowrap;
+                                        font-family: monospace;
+                                        font-size: 0.85rem;
+                                    "
+                                ></span>
+                                <button
+                                    class="btn"
+                                    onclick="app.copyNaginiParameters()"
+                                    title="Copy naGINI parameters"
                                     style="padding: 4px 8px; font-size: 0.85rem"
                                 >
                                     Copy
