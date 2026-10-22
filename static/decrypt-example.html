@@ -196,7 +196,7 @@
             />
         </div>
 
-        <button class="btn" onclick="decryptContent()">
+        <button class="btn" id="decryptButton">
             🔓 Decrypt
         </button>
 
@@ -220,11 +220,10 @@
             If you need to decrypt and execute a script from the command line, you can use this approach:
         </p>
 
-        <pre><code># Download and decrypt a script with curl and openssl
-# Note: This requires the encryption metadata (salt, IV) to be extracted
-
-# For a simpler approach, fetch the encrypted content and decrypt in Node.js
-curl -s http://localhost:5001/SHORTID | node decrypt.js</code></pre>
+        <pre><code># Fetch the encrypted content and decrypt it with the Node.js script below
+curl -s https://YOUR-SERVER/SHORTID &gt; encrypted.txt
+read -rs NAGINI_PASSPHRASE &amp;&amp; export NAGINI_PASSPHRASE
+node decrypt.js encrypted.txt</code></pre>
 
         <h2>Node.js Decryption Script</h2>
 
@@ -233,45 +232,42 @@ curl -s http://localhost:5001/SHORTID | node decrypt.js</code></pre>
         </p>
 
         <pre><code>const crypto = require('crypto');
+const fs = require('fs');
 
-// Encrypted base64 content from Nagini
-const encryptedBase64 = process.argv[2] || '';
-const passphrase = process.argv[3] || '';
-
+// Supports format v2 ("NGN" 0x02 header, 600k iterations, header as AAD)
+// and the legacy headerless format (100k iterations).
 function decrypt(encryptedBase64, passphrase) {
-    // Decode from base64
-    const combined = Buffer.from(encryptedBase64, 'base64');
+    let data = Buffer.from(encryptedBase64.trim(), 'base64');
 
-    // Extract salt (first 16 bytes)
-    const salt = combined.slice(0, 16);
+    const header = Buffer.from([0x4e, 0x47, 0x4e, 0x02]);
+    let iterations = 100000;
+    let aad = null;
+    if (data.subarray(0, 4).equals(header)) {
+        iterations = 600000;
+        aad = header;
+        data = data.subarray(4);
+    }
 
-    // Extract IV (next 12 bytes)
-    const iv = combined.slice(16, 28);
+    const salt = data.subarray(0, 16);
+    const iv = data.subarray(16, 28);
+    const authTag = data.subarray(-16);
+    const ciphertext = data.subarray(28, -16);
 
-    // Extract encrypted data (remaining bytes)
-    const encryptedData = combined.slice(28);
-
-    // Derive key using PBKDF2
-    const key = crypto.pbkdf2Sync(passphrase, salt, 100000, 32, 'sha256');
-
-    // Decrypt using AES-256-GCM
+    const key = crypto.pbkdf2Sync(passphrase, salt, iterations, 32, 'sha256');
     const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-
-    // Extract auth tag (last 16 bytes)
-    const authTag = encryptedData.slice(-16);
-    const ciphertext = encryptedData.slice(0, -16);
-
+    if (aad) decipher.setAAD(aad);
     decipher.setAuthTag(authTag);
 
-    let decrypted = decipher.update(ciphertext, null, 'utf8');
-    decrypted += decipher.final('utf8');
-
-    return decrypted;
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
 }
 
+// Usage: node decrypt.js &lt;file-with-encrypted-content&gt;
+// The passphrase is read from NAGINI_PASSPHRASE so it does not appear in the process list.
+const encryptedContent = fs.readFileSync(process.argv[2], 'utf8');
+const passphrase = process.env.NAGINI_PASSPHRASE || '';
+
 try {
-    const decrypted = decrypt(encryptedBase64, passphrase);
-    console.log(decrypted);
+    process.stdout.write(decrypt(encryptedContent, passphrase));
 } catch (error) {
     console.error('Decryption failed:', error.message);
     process.exit(1);
@@ -279,75 +275,20 @@ try {
 
         <h2>Bash One-Liner Example</h2>
 
-        <pre><code># Decrypt and execute (use with caution!)
-curl -s http://localhost:5001/SHORTID | \
-  node -e "/* paste Node.js decrypt code here */" - "YOUR_PASSPHRASE" | \
-  bash</code></pre>
+        <pre><code># Decrypt, review, then execute (use with caution!)
+node decrypt.js encrypted.txt &gt; script.sh
+less script.sh
+bash script.sh</code></pre>
 
         <div class="warning-box">
             <strong>⚠️ Security Warning:</strong> Only decrypt and execute scripts from trusted sources.
-            Always review the decrypted content before execution. Encryption protects confidentiality,
-            not integrity or authenticity.
+            Always review the decrypted content before execution. AES-GCM detects tampering by anyone
+            who does not know the passphrase, but it cannot tell you who wrote the script, and a
+            compromised server can alter this page and the composer that performs the encryption.
         </div>
     </div>
 
     <script src="/static/crypto.js"></script>
-    <script>
-        async function decryptContent() {
-            const encryptedContent = document.getElementById('encryptedContent').value.trim();
-            const passphrase = document.getElementById('passphrase').value;
-            const resultDiv = document.getElementById('result');
-
-            // Clear previous result
-            resultDiv.innerHTML = '';
-
-            // Validate inputs
-            if (!encryptedContent) {
-                resultDiv.innerHTML = '<div class="error">Please enter encrypted content</div>';
-                return;
-            }
-
-            if (!passphrase) {
-                resultDiv.innerHTML = '<div class="error">Please enter a passphrase</div>';
-                return;
-            }
-
-            try {
-                // Decrypt the content
-                const decrypted = await NaginiCrypto.decrypt(encryptedContent, passphrase);
-
-                // Display success and decrypted content
-                resultDiv.innerHTML = `
-                    <div class="success">✅ Decryption successful!</div>
-                    <div class="result">
-                        <h3 style="color: #4a9eff; margin-bottom: 10px;">Decrypted Script Content:</h3>
-                        <pre><code>${escapeHtml(decrypted)}</code></pre>
-                    </div>
-                `;
-            } catch (error) {
-                resultDiv.innerHTML = `
-                    <div class="error">
-                        <strong>❌ Decryption failed:</strong><br>
-                        ${escapeHtml(error.message)}
-                        <br><br>
-                        <small>Make sure you're using the correct passphrase and the content is a valid encrypted Nagini script.</small>
-                    </div>
-                `;
-            }
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        // Allow Enter key in passphrase field
-        document.getElementById('passphrase').addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
-                decryptContent();
-            }
-        });
-    </script>
+    <script src="/static/decrypt-example.js"></script>
 </body>
 </html>

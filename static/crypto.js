@@ -7,9 +7,24 @@
 
 const NaginiCrypto = {
   /**
-   * Minimum passphrase length requirement
+   * Minimum passphrase length for new encryptions
    */
-  MIN_PASSPHRASE_LENGTH: 8,
+  MIN_PASSPHRASE_LENGTH: 12,
+
+  /**
+   * Format v2 header: "NGN" + version byte. Authenticated as AES-GCM additional data.
+   */
+  V2_HEADER: new Uint8Array([0x4e, 0x47, 0x4e, 0x02]),
+
+  /**
+   * PBKDF2 iterations for the v2 format and for the legacy headerless format
+   */
+  V2_ITERATIONS: 600000,
+  LEGACY_ITERATIONS: 100000,
+
+  SALT_LENGTH: 16,
+  IV_LENGTH: 12,
+  TAG_LENGTH: 16,
 
   /**
    * Validates a passphrase meets security requirements
@@ -35,9 +50,10 @@ const NaginiCrypto = {
    * Derives a cryptographic key from a passphrase using PBKDF2
    * @param {string} passphrase - User's passphrase
    * @param {Uint8Array} salt - Salt for key derivation
+   * @param {number} iterations - PBKDF2 iteration count
    * @returns {Promise<CryptoKey>} - Derived encryption key
    */
-  async deriveKey(passphrase, salt) {
+  async deriveKey(passphrase, salt, iterations) {
     const encoder = new TextEncoder();
     const passphraseBuffer = encoder.encode(passphrase);
 
@@ -55,7 +71,7 @@ const NaginiCrypto = {
       {
         name: 'PBKDF2',
         salt: salt,
-        iterations: 100000, // High iteration count for security
+        iterations: iterations,
         hash: 'SHA-256'
       },
       baseKey,
@@ -68,10 +84,11 @@ const NaginiCrypto = {
   },
 
   /**
-   * Encrypts content using AES-256-GCM
+   * Encrypts content using AES-256-GCM (format v2)
+   * Output: base64( "NGN" 0x02 || salt[16] || iv[12] || ciphertext+tag )
    * @param {string} content - Plain text content to encrypt
    * @param {string} passphrase - User's passphrase
-   * @returns {Promise<string>} - Base64-encoded encrypted data with salt and IV
+   * @returns {Promise<string>} - Base64-encoded encrypted data
    */
   async encrypt(content, passphrase) {
     // Validate passphrase
@@ -84,35 +101,29 @@ const NaginiCrypto = {
       const encoder = new TextEncoder();
       const contentBuffer = encoder.encode(content);
 
-      // Generate random salt (16 bytes)
-      const salt = crypto.getRandomValues(new Uint8Array(16));
+      const salt = crypto.getRandomValues(new Uint8Array(this.SALT_LENGTH));
+      const iv = crypto.getRandomValues(new Uint8Array(this.IV_LENGTH));
+      const key = await this.deriveKey(passphrase, salt, this.V2_ITERATIONS);
 
-      // Derive encryption key from passphrase and salt
-      const key = await this.deriveKey(passphrase, salt);
-
-      // Generate random IV (12 bytes for GCM)
-      const iv = crypto.getRandomValues(new Uint8Array(12));
-
-      // Encrypt the content
       const encryptedBuffer = await crypto.subtle.encrypt(
         {
           name: 'AES-GCM',
           iv: iv,
+          additionalData: this.V2_HEADER,
           tagLength: 128 // 128-bit authentication tag
         },
         key,
         contentBuffer
       );
 
-      // Combine salt + iv + encrypted data
-      // Format: [16 bytes salt][12 bytes IV][remaining bytes encrypted data]
+      const header = this.V2_HEADER;
       const encryptedData = new Uint8Array(encryptedBuffer);
-      const combined = new Uint8Array(salt.length + iv.length + encryptedData.length);
-      combined.set(salt, 0);
-      combined.set(iv, salt.length);
-      combined.set(encryptedData, salt.length + iv.length);
+      const combined = new Uint8Array(header.length + salt.length + iv.length + encryptedData.length);
+      combined.set(header, 0);
+      combined.set(salt, header.length);
+      combined.set(iv, header.length + salt.length);
+      combined.set(encryptedData, header.length + salt.length + iv.length);
 
-      // Convert to base64
       return this.arrayBufferToBase64(combined);
     } catch (error) {
       console.error('Encryption error:', error);
@@ -121,46 +132,45 @@ const NaginiCrypto = {
   },
 
   /**
-   * Decrypts AES-256-GCM encrypted content
-   * @param {string} encryptedBase64 - Base64-encoded encrypted data with salt and IV
+   * Decrypts AES-256-GCM encrypted content (format v2, or legacy headerless format)
+   * @param {string} encryptedBase64 - Base64-encoded encrypted data
    * @param {string} passphrase - User's passphrase
    * @returns {Promise<string>} - Decrypted plain text content
    */
   async decrypt(encryptedBase64, passphrase) {
-    // Validate passphrase
-    const validation = this.validatePassphrase(passphrase);
-    if (!validation.valid) {
-      throw new Error(validation.error);
+    // No minimum length on decrypt: older scripts may use shorter passphrases
+    if (!passphrase || typeof passphrase !== 'string') {
+      throw new Error('Passphrase is required');
     }
 
     try {
-      // Decode from base64
-      const combined = this.base64ToArrayBuffer(encryptedBase64);
+      let data = this.base64ToArrayBuffer(encryptedBase64.trim());
 
-      // Extract salt (first 16 bytes)
-      const salt = combined.slice(0, 16);
+      let iterations = this.LEGACY_ITERATIONS;
+      let additionalData = null;
+      const header = this.V2_HEADER;
+      if (data.length >= header.length && header.every((b, i) => data[i] === b)) {
+        iterations = this.V2_ITERATIONS;
+        additionalData = header;
+        data = data.slice(header.length);
+      }
 
-      // Extract IV (next 12 bytes)
-      const iv = combined.slice(16, 28);
+      if (data.length < this.SALT_LENGTH + this.IV_LENGTH + this.TAG_LENGTH) {
+        throw new Error('Encrypted data too short');
+      }
 
-      // Extract encrypted data (remaining bytes)
-      const encryptedData = combined.slice(28);
+      const salt = data.slice(0, this.SALT_LENGTH);
+      const iv = data.slice(this.SALT_LENGTH, this.SALT_LENGTH + this.IV_LENGTH);
+      const encryptedData = data.slice(this.SALT_LENGTH + this.IV_LENGTH);
 
-      // Derive decryption key from passphrase and salt
-      const key = await this.deriveKey(passphrase, salt);
+      const key = await this.deriveKey(passphrase, salt, iterations);
 
-      // Decrypt the content
-      const decryptedBuffer = await crypto.subtle.decrypt(
-        {
-          name: 'AES-GCM',
-          iv: iv,
-          tagLength: 128
-        },
-        key,
-        encryptedData
-      );
+      const params = { name: 'AES-GCM', iv: iv, tagLength: 128 };
+      if (additionalData) {
+        params.additionalData = additionalData;
+      }
+      const decryptedBuffer = await crypto.subtle.decrypt(params, key, encryptedData);
 
-      // Convert decrypted buffer to string
       const decoder = new TextDecoder();
       return decoder.decode(decryptedBuffer);
     } catch (error) {

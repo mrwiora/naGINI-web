@@ -1,12 +1,26 @@
 services:
   nagini-web:
     image: mrwiora/nagini-web:latest
+    # Published on localhost only; put a TLS-terminating reverse proxy in front
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     volumes:
       - ./data:/app/data
     environment:
       - NAGINI_LISTENADDRESS=0.0.0.0
       - NAGINI_LISTENPORT=8080
       - NAGINI_DBPATH=data/nagini.db
+      # Optional: initial admin password (min. 12 chars); otherwise a random one is printed to the log
+      # - NAGINI_ADMIN_PASSWORD=
+      # Optional: allow self-registration of user accounts (default: false)
+      # - NAGINI_ALLOW_REGISTRATION=false
+      # Optional: header set by your reverse proxy with the client IP (for login rate limiting)
+      # - NAGINI_REAL_IP_HEADER=X-Real-IP
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped

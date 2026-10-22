@@ -36,7 +36,10 @@ minify: ## Minify JavaScript files
 	@mkdir -p embedded
 	@$(UGLIFYJS) static/app.js -c -m -o embedded/app.min.js
 	@$(UGLIFYJS) static/crypto.js -c -m -o embedded/crypto.min.js
+	@$(UGLIFYJS) static/ui.js -c -m -o embedded/ui.min.js
+	@$(UGLIFYJS) static/decrypt-example.js -c -m -o embedded/decrypt-example.min.js
 	@cp templates/index.html embedded/index.html
+	@cp static/decrypt-example.html embedded/decrypt-example.html
 	@echo "Minification complete:"
 	@echo "  app.js:    $$(du -h static/app.js | cut -f1) -> $$(du -h embedded/app.min.js | cut -f1)"
 	@echo "  crypto.js: $$(du -h static/crypto.js | cut -f1) -> $$(du -h embedded/crypto.min.js | cut -f1)"

@@ -2,14 +2,119 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"log"
+	"net/mail"
+	"os"
+	"regexp"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
+
+const (
+	// MinPasswordLength must match MIN_PASSWORD_LENGTH in static/ui.js
+	MinPasswordLength = 12
+	// MaxPasswordLength is bcrypt's input limit in bytes
+	MaxPasswordLength = 72
+	maxEmailLength    = 254
+)
+
+var usernamePattern = regexp.MustCompile(`^[A-Za-z0-9_.-]{3,32}$`)
+
+// validatePassword enforces password length limits
+func validatePassword(password string) error {
+	if len(password) < MinPasswordLength {
+		return fmt.Errorf("password must be at least %d characters long", MinPasswordLength)
+	}
+	if len(password) > MaxPasswordLength {
+		return fmt.Errorf("password must be at most %d bytes long", MaxPasswordLength)
+	}
+	return nil
+}
+
+// validateUsername enforces the allowed username format
+func validateUsername(username string) error {
+	if !usernamePattern.MatchString(username) {
+		return fmt.Errorf("username must be 3-32 characters: letters, digits, '_', '.', '-'")
+	}
+	return nil
+}
+
+// validateEmail checks that the value is a single plain email address
+func validateEmail(email string) error {
+	if len(email) > maxEmailLength {
+		return fmt.Errorf("email address is too long")
+	}
+	addr, err := mail.ParseAddress(email)
+	if err != nil || addr.Address != email {
+		return fmt.Errorf("invalid email address")
+	}
+	return nil
+}
+
+// generatePassword returns a random password (24 URL-safe characters)
+func generatePassword() (string, error) {
+	b := make([]byte, 18)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+// initialAdminPassword returns NAGINI_ADMIN_PASSWORD if set, otherwise a generated password
+func initialAdminPassword() (password string, generated bool, err error) {
+	if p := os.Getenv("NAGINI_ADMIN_PASSWORD"); p != "" {
+		if err := validatePassword(p); err != nil {
+			return "", false, fmt.Errorf("NAGINI_ADMIN_PASSWORD: %w", err)
+		}
+		return p, false, nil
+	}
+	p, err := generatePassword()
+	return p, true, err
+}
+
+// printAdminPassword shows the initial admin password once on stdout
+func printAdminPassword(password string, generated bool) {
+	if !generated {
+		fmt.Println("✓ Admin password set from NAGINI_ADMIN_PASSWORD")
+		return
+	}
+	fmt.Println("============================================================")
+	fmt.Println("Generated admin credentials (shown only once):")
+	fmt.Println("  Username: admin")
+	fmt.Printf("  Password: %s\n", password)
+	fmt.Println("Change this password after the first login.")
+	fmt.Println("============================================================")
+}
+
+var (
+	dummyHashOnce sync.Once
+	dummyHash     string
+)
+
+// compareDummyPassword spends the same time as a real bcrypt comparison, so login
+// response times do not reveal whether a username exists
+func compareDummyPassword(password string) {
+	dummyHashOnce.Do(func() {
+		h, err := bcrypt.GenerateFromPassword([]byte("nagini-dummy-password"), bcrypt.DefaultCost)
+		if err == nil {
+			dummyHash = string(h)
+		}
+	})
+	bcrypt.CompareHashAndPassword([]byte(dummyHash), []byte(password))
+}
+
+// hashToken returns the value stored in the sessions table for a session token
+func hashToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
 
 // UserRole represents the role of a user
 type UserRole string
@@ -90,14 +195,16 @@ func initAuthTables() error {
 	}
 
 	if count == 0 {
-		// Create default admin user with password "admin"
-		// NOTE: Users should change this password immediately
-		err = createUser("admin", "admin", RoleAdmin)
+		password, generated, err := initialAdminPassword()
 		if err != nil {
-			return fmt.Errorf("failed to create default admin user: %w", err)
+			return err
 		}
-		fmt.Println("⚠️  Default admin user created (username: admin, password: admin)")
-		fmt.Println("⚠️  Please change the admin password immediately!")
+		if err := createUser("admin", password, RoleAdmin); err != nil {
+			return fmt.Errorf("failed to create admin user: %w", err)
+		}
+		printAdminPassword(password, generated)
+	} else if err := rotateDefaultAdminPassword(); err != nil {
+		return err
 	}
 
 	// Migrate existing users table to add email column if it doesn't exist
@@ -106,6 +213,37 @@ func initAuthTables() error {
 		return fmt.Errorf("failed to migrate users table: %w", err)
 	}
 
+	return nil
+}
+
+// rotateDefaultAdminPassword replaces the publicly known admin/admin password that
+// older versions created, so existing deployments are not left open
+func rotateDefaultAdminPassword() error {
+	var userID int
+	var passwordHash string
+	err := db.QueryRow(`SELECT id, password_hash FROM users WHERE username = 'admin'`).Scan(&userID, &passwordHash)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to check admin password: %w", err)
+	}
+	if !verifyPassword("admin", passwordHash) {
+		return nil
+	}
+
+	password, generated, err := initialAdminPassword()
+	if err != nil {
+		return err
+	}
+	if err := updateUserPassword(userID, password); err != nil {
+		return fmt.Errorf("failed to rotate default admin password: %w", err)
+	}
+	if err := deleteUserSessions(userID, ""); err != nil {
+		return fmt.Errorf("failed to clear admin sessions: %w", err)
+	}
+	fmt.Println("⚠️  The admin account still used the default password 'admin'; it has been replaced.")
+	printAdminPassword(password, generated)
 	return nil
 }
 
@@ -209,6 +347,7 @@ func authenticateUser(username, password string) (*User, error) {
 		if debug {
 			log.Printf("authenticateUser - User not found: %s", username)
 		}
+		compareDummyPassword(password)
 		return nil, fmt.Errorf("invalid username or password")
 	}
 	if err != nil {
@@ -255,13 +394,14 @@ func createSession(userID int) (*Session, error) {
 	expiresAt := time.Now().Add(24 * time.Hour)
 
 	if debug {
-		log.Printf("createSession - Creating session for userID: %d, token: %s, expires: %v", userID, token, expiresAt)
+		log.Printf("createSession - Creating session for userID: %d, expires: %v", userID, expiresAt)
 	}
 
+	// Only the hash of the token is stored; a database leak does not expose live sessions
 	_, err = db.Exec(`
 		INSERT INTO sessions (token, user_id, expires_at)
 		VALUES (?, ?, ?)
-	`, token, userID, expiresAt)
+	`, hashToken(token), userID, expiresAt)
 
 	if err != nil {
 		if debug {
@@ -304,26 +444,24 @@ func createSession(userID int) (*Session, error) {
 
 // getSession retrieves a session by token
 func getSession(token string) (*Session, error) {
-	if debug {
-		log.Printf("getSession - Looking up token: %s", token)
-	}
-
 	var session Session
 	var expiresAt, createdAt string
 
+	var tokenHash string
 	err := db.QueryRow(`
 		SELECT s.token, s.user_id, u.username, u.role, s.expires_at, s.created_at
 		FROM sessions s
 		JOIN users u ON s.user_id = u.id
 		WHERE s.token = ?
-	`, token).Scan(
-		&session.Token,
+	`, hashToken(token)).Scan(
+		&tokenHash,
 		&session.UserID,
 		&session.Username,
 		&session.Role,
 		&expiresAt,
 		&createdAt,
 	)
+	session.Token = token
 
 	if err == sql.ErrNoRows {
 		if debug {
@@ -381,7 +519,13 @@ func getSession(token string) (*Session, error) {
 
 // deleteSession deletes a session
 func deleteSession(token string) error {
-	_, err := db.Exec("DELETE FROM sessions WHERE token = ?", token)
+	_, err := db.Exec("DELETE FROM sessions WHERE token = ?", hashToken(token))
+	return err
+}
+
+// deleteUserSessions deletes all sessions of a user except keepToken (if non-empty)
+func deleteUserSessions(userID int, keepToken string) error {
+	_, err := db.Exec("DELETE FROM sessions WHERE user_id = ? AND token != ?", userID, hashToken(keepToken))
 	return err
 }
 
@@ -389,6 +533,20 @@ func deleteSession(token string) error {
 func cleanupExpiredSessions() error {
 	_, err := db.Exec("DELETE FROM sessions WHERE expires_at < ?", time.Now())
 	return err
+}
+
+// startSessionCleanup removes expired sessions now and then hourly
+func startSessionCleanup() {
+	if err := cleanupExpiredSessions(); err != nil {
+		log.Printf("Warning: session cleanup failed: %v", err)
+	}
+	go func() {
+		for range time.Tick(time.Hour) {
+			if err := cleanupExpiredSessions(); err != nil {
+				log.Printf("Warning: session cleanup failed: %v", err)
+			}
+		}
+	}()
 }
 
 // getAllUsers returns all users (admin only)

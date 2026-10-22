@@ -7,7 +7,7 @@ A web-based visual script composer for managing and composing code blocks.
 - Create and manage reusable script blocks
 - Compose blocks into complete scripts
 - Save and load compositions
-- Export compositions via URL
+- Publish compositions client-side encrypted (AES-256-GCM, see [ENCRYPTION.md](ENCRYPTION.md))
 - Database-backed storage using SQLite
 - User authentication with role-based access (admin, user, anonymous)
 
@@ -54,13 +54,17 @@ The application includes a user authentication system with three user roles:
 - **User**: Standard authenticated user
 - **Anonymous**: Unauthenticated users (not logged in)
 
-### Default Admin Account
+### Initial Admin Account
 
-On first startup, a default admin account is created:
-- **Username**: `admin`
-- **Password**: `admin`
+On first startup an `admin` account is created:
 
-⚠️ **Important**: Change the admin password immediately after first login!
+- If `NAGINI_ADMIN_PASSWORD` is set (at least 12 characters), it is used as the password.
+- Otherwise a random password is generated and printed **once** to stdout (`docker logs` when running in Docker).
+
+Change the password after the first login.
+
+Upgrading from a version that created `admin`/`admin`: if the admin account still uses the password
+`admin`, it is replaced on startup by `NAGINI_ADMIN_PASSWORD` or a generated password printed to stdout.
 
 ### User Management
 
@@ -68,15 +72,22 @@ On first startup, a default admin account is created:
 - After login, the button shows your username
 - Click your username to access **User Settings**:
   - View your account information
-  - Change your password
+  - Change your password (ends all your other sessions)
   - Logout
+
+Passwords must be 12–72 characters. Repeated failed logins are rate limited per IP and per username.
 
 ### User Registration
 
-- When the admin password is still default (`admin`), the login modal shows the default credentials
-- Once the admin password is changed, the login modal automatically displays a **Register** button
-- New users can self-register with standard user privileges
-- Registered users have the `user` role (not `admin`)
+Self-registration is **disabled** by default. Set `NAGINI_ALLOW_REGISTRATION=true` to enable it; the login
+modal then shows a **Register** button. Registered users have the `user` role (not `admin`).
+Registration attempts are rate limited per IP.
+
+### Roles
+
+- **Anonymous**: browse blocks and compose scripts
+- **User**: additionally publish encrypted scripts
+- **Admin**: additionally create/edit/delete blocks and save/delete compositions
 
 ### Authentication API Endpoints
 
@@ -85,12 +96,14 @@ On first startup, a default admin account is created:
 - `GET /api/auth/me` - Get current user info
 - `POST /api/auth/register` - Register a new user (creates user with 'user' role)
 - `POST /api/auth/change-password` - Change current user's password
+- `POST /api/auth/update-email` - Change current user's email address
 
 ## Development
 
 ### Prerequisites
 
-- Go 1.16 or higher
+- Go 1.25 or higher
+- `uglify-js` (`npm install -g uglify-js`) for `make build`
 - Git (for version detection)
 - SQLite3
 
@@ -128,32 +141,64 @@ make run
 ### Authentication
 - `POST /api/auth/login` - Login with username and password
 - `POST /api/auth/logout` - Logout current user
-- `GET /api/auth/me` - Get current user info
-- `POST /api/auth/register` - Register a new user
+- `GET /api/auth/me` - Get current user info (also reports whether registration is enabled)
+- `POST /api/auth/register` - Register a new user (only if `NAGINI_ALLOW_REGISTRATION` is enabled)
 - `POST /api/auth/change-password` - Change password
+- `POST /api/auth/update-email` - Change email address
 
 ### Application
 - `GET /api/version` - Get application version
 
 ### Blocks
 - `GET /api/blocks` - List all blocks
-- `POST /api/block` - Create a new block
-- `GET /api/block/:id` - Get a specific block
-- `PUT /api/block/:id` - Update a block
-- `DELETE /api/block/:id` - Delete a block
+- `POST /api/blocks` - Create a new block (admin)
+- `GET /api/blocks/:id` - Get a specific block
+- `PUT /api/blocks/:id` - Update a block (admin)
+- `DELETE /api/blocks/:id` - Delete a block (admin)
 
 ### Compositions
-- `POST /api/compose` - Preview block composition
 - `GET /api/compositions` - List all compositions
-- `GET /api/composition/:id` - Get a specific composition
-- `DELETE /api/composition/:id` - Delete a composition
-- `POST /api/save` - Save a composition
-- `POST /api/export` - Export a composition
-- `GET /:composition` - Serve a composition as plain text
+- `GET /api/compositions/:id` - Get a specific composition
+- `DELETE /api/compositions/:id` - Delete a composition (admin)
+- `POST /api/save` - Save a composition (admin)
+
+### Published scripts
+- `POST /api/publish-encrypted` - Publish client-side encrypted content (logged-in users)
+- `GET /:short_id` - Serve a published script (base64 ciphertext) as plain text
 
 ## Server
 
-The application runs on `http://localhost:5000` by default.
+The application listens on `http://127.0.0.1:8080` by default.
+
+### Configuration
+
+| Variable | Default | Description |
+|---|---|---|
+| `NAGINI_LISTENADDRESS` | `127.0.0.1` | Listen address |
+| `NAGINI_LISTENPORT` | `8080` | Listen port |
+| `NAGINI_URL` | – | Public base URL used in published script links (e.g. `https://script.example.org`) |
+| `NAGINI_DBPATH` | `nagini.db` | SQLite database path |
+| `NAGINI_ADMIN_PASSWORD` | – | Initial admin password (min. 12 characters); random if unset |
+| `NAGINI_ALLOW_REGISTRATION` | `false` | Allow self-registration |
+| `NAGINI_REAL_IP_HEADER` | – | Header with the client IP set by your reverse proxy (e.g. `X-Real-IP`), used for rate limiting |
+
+### Deployment notes
+
+- The session cookie is `Secure`: for anything other than `localhost`, serve the application through a
+  TLS-terminating reverse proxy. `naGINI` refuses plain `http://` script URLs by default.
+- Behind a reverse proxy, set `NAGINI_REAL_IP_HEADER`; otherwise all clients share one rate-limit bucket.
+- The server sends a strict Content-Security-Policy; the frontend must not use inline scripts or inline
+  event handlers (use `data-click` etc., see `static/ui.js`).
+
+### Docker
+
+The container runs as the unprivileged user `nagini` (uid 100, gid 101) with a read-only root
+filesystem (see `docker-compose.yml`). An existing `./data` bind mount created by an older (root)
+container must be made writable once:
+
+```bash
+sudo chown -R 100:101 ./data
+```
 
 ## Debug Mode
 
@@ -164,10 +209,9 @@ Enable verbose logging for authentication and session management:
 ```
 
 Debug mode will log:
-- Session creation and validation
-- Cookie handling
-- Authentication attempts
-- Token lookups and expiration checks
+- Session creation and validation (never token values)
+- Authentication attempts (usernames, not passwords)
+- Session expiration checks
 
 This is useful for troubleshooting authentication issues.
 

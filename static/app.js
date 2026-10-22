@@ -29,7 +29,7 @@ class NaginiApp {
     this.minZoom = 0.2;
     this.maxZoom = 3;
 
-    // Load saved variables from localStorage
+    // Load saved variables from sessionStorage
     this.loadVariables();
 
     this.init();
@@ -130,7 +130,7 @@ class NaginiApp {
             .split(",")
             .map((t) => t.trim())
             .filter((t) => t)
-            .map((t) => `<span class="block-tag">${t}</span>`)
+            .map((t) => `<span class="block-tag">${this.escapeHtml(t)}</span>`)
             .join("")}</div>`
         : "";
 
@@ -138,7 +138,7 @@ class NaginiApp {
 
       blockItem.innerHTML = `
                 <div class="block-item-header">
-                    <div class="block-name">${block.name}</div>
+                    <div class="block-name">${this.escapeHtml(block.name)}</div>
                     ${editIconHtml}
                 </div>
                 ${tagsHtml}
@@ -364,23 +364,31 @@ class NaginiApp {
     // Get the block content
     const block = this.blocks.find((b) => b.id === node.blockId);
     const blockContent = block ? block.content : "Script Block";
-    const escapedContent = blockContent
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
 
     nodeElement.innerHTML = `
-            <div class="node-header" data-node-id="${node.id}">
-                <span>${node.blockName}</span>
-                <button class="node-remove" onclick="app.removeNode('${node.id}')">X</button>
+            <div class="node-header">
+                <span></span>
+                <button class="node-remove">X</button>
             </div>
             <div class="node-body">
                 <div style="position: relative;">
-                    <div class="connection-point input" data-node-id="${node.id}" data-type="input"></div>
-                    <pre style="margin: 0; padding: 5px 20px; color: #e0e0e0; font-size: 0.75rem; white-space: pre-wrap; word-break: break-word; max-width: 300px;">${escapedContent}</pre>
-                    <div class="connection-point output" data-node-id="${node.id}" data-type="output"></div>
+                    <div class="connection-point input" data-type="input"></div>
+                    <pre style="margin: 0; padding: 5px 20px; color: #e0e0e0; font-size: 0.75rem; white-space: pre-wrap; word-break: break-word; max-width: 300px;"></pre>
+                    <div class="connection-point output" data-type="output"></div>
                 </div>
             </div>
         `;
+
+    // Fill user-controlled values via DOM APIs so they are never parsed as HTML
+    nodeElement.querySelector(".node-header").dataset.nodeId = node.id;
+    nodeElement.querySelector(".node-header span").textContent = node.blockName;
+    nodeElement.querySelector(".node-body pre").textContent = blockContent;
+    nodeElement
+      .querySelectorAll(".connection-point")
+      .forEach((point) => (point.dataset.nodeId = node.id));
+    nodeElement
+      .querySelector(".node-remove")
+      .addEventListener("click", () => this.removeNode(node.id));
 
     canvas.appendChild(nodeElement);
 
@@ -420,10 +428,6 @@ class NaginiApp {
     const block = this.blocks.find((b) => b.id === node.blockId);
     if (!block) return;
 
-    const escapedContent = block.content
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-
     // Update node name
     node.blockName = block.name;
 
@@ -436,7 +440,7 @@ class NaginiApp {
     // Update the content in the body
     const preElement = nodeElement.querySelector(".node-body pre");
     if (preElement) {
-      preElement.innerHTML = escapedContent;
+      preElement.textContent = block.content;
     }
   }
 
@@ -1033,7 +1037,7 @@ class NaginiApp {
       // Change footer to just "Close"
       if (footer) {
         footer.innerHTML = `
-          <button class="btn primary" onclick="app.closeSaveModal()">Close</button>
+          <button class="btn primary" data-click="app.closeSaveModal">Close</button>
         `;
       }
       return;
@@ -1064,7 +1068,7 @@ class NaginiApp {
       // Change footer to just "Close"
       if (footer) {
         footer.innerHTML = `
-          <button class="btn primary" onclick="app.closeSaveModal()">Close</button>
+          <button class="btn primary" data-click="app.closeSaveModal">Close</button>
         `;
       }
       return;
@@ -1094,8 +1098,8 @@ class NaginiApp {
     if (errorMessage) errorMessage.classList.remove("visible");
     if (footer) {
       footer.innerHTML = `
-        <button class="btn" onclick="app.closeSaveModal()">Cancel</button>
-        <button class="btn primary" onclick="app.doSave()">Save</button>
+        <button class="btn" data-click="app.closeSaveModal">Cancel</button>
+        <button class="btn primary" data-click="app.doSave">Save</button>
       `;
     }
     if (nameInput) nameInput.disabled = false;
@@ -1158,7 +1162,7 @@ class NaginiApp {
         // Change footer buttons to just "Close"
         if (footer) {
           footer.innerHTML = `
-            <button class="btn primary" onclick="app.closeSaveModal()">Close</button>
+            <button class="btn primary" data-click="app.closeSaveModal">Close</button>
           `;
         }
       } else {
@@ -1603,8 +1607,8 @@ class NaginiApp {
         <div style="flex: 1; color: #999; font-size: 0.85rem; display: flex; align-items: center;">
           <span><kbd style="background: #3a3a3a; padding: 2px 6px; border-radius: 3px; font-size: 0.8rem;">Esc</kbd> to close • <kbd style="background: #3a3a3a; padding: 2px 6px; border-radius: 3px; font-size: 0.8rem;">Ctrl+Enter</kbd> to create</span>
         </div>
-        <button class="btn" onclick="app.closeEditBlockModal()">Cancel</button>
-        <button class="btn primary" onclick="app.doEditBlock()">Create Block</button>
+        <button class="btn" data-click="app.closeEditBlockModal">Cancel</button>
+        <button class="btn primary" data-click="app.doEditBlock">Create Block</button>
       `;
     }
 
@@ -1878,9 +1882,9 @@ class NaginiApp {
         <div style="flex: 1; color: #999; font-size: 0.85rem; display: flex; align-items: center;">
           <span><kbd style="background: #3a3a3a; padding: 2px 6px; border-radius: 3px; font-size: 0.8rem;">Esc</kbd> to close • <kbd style="background: #3a3a3a; padding: 2px 6px; border-radius: 3px; font-size: 0.8rem;">Ctrl+Enter</kbd> to save</span>
         </div>
-        <button class="btn" onclick="app.closeEditBlockModal()">Cancel</button>
-        <button class="btn" style="background: #f44336; display: none" id="deleteBlockBtn" onclick="app.showDeleteBlockConfirmation()">Delete</button>
-        <button class="btn primary" onclick="app.doEditBlock()">Save Changes</button>
+        <button class="btn" data-click="app.closeEditBlockModal">Cancel</button>
+        <button class="btn" style="background: #f44336; display: none" id="deleteBlockBtn" data-click="app.showDeleteBlockConfirmation">Delete</button>
+        <button class="btn primary" data-click="app.doEditBlock">Save Changes</button>
       `;
     }
 
@@ -1994,7 +1998,7 @@ class NaginiApp {
         const footer = document.getElementById("editBlockModalFooter");
         if (footer) {
           footer.innerHTML = `
-            <button class="btn primary" onclick="app.closeEditBlockModal(true)">Close</button>
+            <button class="btn primary" data-click="app.closeEditBlockModal" data-arg="true">Close</button>
           `;
         }
 
@@ -2229,7 +2233,7 @@ class NaginiApp {
       .then(() => {
         // Show temporary feedback
         const copyButton = document.querySelector(
-          '#urlSection button[onclick="app.copyCompositionUrl()"]',
+          '#urlSection button[data-click="app.copyCompositionUrl"]',
         );
         if (copyButton) {
           const originalHTML = copyButton.innerHTML;
@@ -2403,7 +2407,7 @@ class NaginiApp {
         input.addEventListener("input", (e) => {
           this.variables[varName] = e.target.value;
           this.publishedScript = null; // Clear published script when variables change
-          this.saveVariables(); // Save to localStorage
+          this.saveVariables(); // Save to sessionStorage
           this.updateMetadata(); // Update metadata to reflect filled count
           this.updatePreview(); // Update preview when variable changes (now local!)
         });
@@ -2413,17 +2417,23 @@ class NaginiApp {
 
   // Helper to escape HTML
   escapeHtml(text) {
-    const div = document.createElement("div");
-    div.textContent = text;
-    return div.innerHTML;
+    return String(text)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 
   // Replace variables in content with their values
   replaceVariables(content) {
     let result = content;
     Object.keys(this.variables).forEach((varName) => {
-      const regex = new RegExp(`\\{\\{\\s*${varName}\\s*\\}\\}`, "g");
-      result = result.replace(regex, this.variables[varName] || "");
+      const escapedName = varName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(`\\{\\{\\s*${escapedName}\\s*\\}\\}`, "g");
+      const value = this.variables[varName] || "";
+      // Function replacer: "$&", "$1" etc. in values are inserted literally
+      result = result.replace(regex, () => value);
     });
     return result;
   }
@@ -2538,6 +2548,13 @@ class NaginiApp {
   }
 
   async publishComposition() {
+    // Publishing requires an account (enforced server-side as well)
+    if (!window.currentUser || !window.currentUser.authenticated) {
+      alert("Please log in to publish scripts.");
+      showLoginModal();
+      return;
+    }
+
     // If not triggered by generatePassphraseAndPublish, mark as manual
     if (!this.passphraseWasGenerated) {
       this.passphraseWasGenerated = false;
@@ -2612,6 +2629,12 @@ class NaginiApp {
           compositionId: this.savedCompositionId || null,
         }),
       });
+
+      if (publishResponse.status === 401) {
+        alert("Your session has expired. Please log in again to publish.");
+        showLoginModal();
+        return;
+      }
 
       const result = await publishResponse.json();
 
@@ -2691,10 +2714,9 @@ class NaginiApp {
     if (naginiParamsSection) naginiParamsSection.style.display = "block";
     const naginiParamsDisplay = document.getElementById("naginiParameters");
     if (naginiParamsDisplay) {
-      const displayPassphrase = this.passphraseWasGenerated
-        ? this.publishedPassphrase || ""
-        : "{{your-passphrase}}";
-      const naginiParamsText = `-url ${result.full_url} -passphrase "${displayPassphrase}"`;
+      // The passphrase is not part of the command line (it would be visible in the
+      // process list); naGINI prompts for it, or reads NAGINI_PASSPHRASE.
+      const naginiParamsText = `-url ${result.full_url}`;
       naginiParamsDisplay.textContent = naginiParamsText;
       this.naginiParameters = naginiParamsText;
 
@@ -2703,7 +2725,7 @@ class NaginiApp {
         .writeText(naginiParamsText)
         .then(() => {
           const copyButton = document.querySelector(
-            '#naginiParametersSection button[onclick="app.copyNaginiParameters()"]',
+            '#naginiParametersSection button[data-click="app.copyNaginiParameters"]',
           );
           if (copyButton) {
             const originalHTML = copyButton.innerHTML;
@@ -2744,7 +2766,7 @@ class NaginiApp {
       .writeText(this.naginiParameters)
       .then(() => {
         const copyButton = document.querySelector(
-          '#naginiParametersSection button[onclick="app.copyNaginiParameters()"]',
+          '#naginiParametersSection button[data-click="app.copyNaginiParameters"]',
         );
         if (copyButton) {
           const originalHTML = copyButton.innerHTML;
@@ -2769,7 +2791,7 @@ class NaginiApp {
       .writeText(this.publishedPassphrase)
       .then(() => {
         const copyButton = document.querySelector(
-          '#passphraseSection button[onclick="app.copyCompositionPassphrase()"]',
+          '#passphraseSection button[data-click="app.copyCompositionPassphrase"]',
         );
         if (copyButton) {
           const originalHTML = copyButton.innerHTML;
@@ -2795,25 +2817,31 @@ class NaginiApp {
     }
   }
 
-  // Load variables from localStorage
+  // Load variables from sessionStorage (values may be secrets; they must not outlive the tab)
   loadVariables() {
     try {
-      const saved = localStorage.getItem("nagini-variables");
+      // Remove values persisted by older versions in localStorage
+      localStorage.removeItem("nagini-variables");
+    } catch (error) {
+      // Storage may be unavailable (private mode); nothing to clean up
+    }
+    try {
+      const saved = sessionStorage.getItem("nagini-variables");
       if (saved) {
         this.variables = JSON.parse(saved);
       }
     } catch (error) {
-      console.error("Failed to load variables from localStorage:", error);
+      console.error("Failed to load variables from sessionStorage:", error);
       this.variables = {};
     }
   }
 
-  // Save variables to localStorage
+  // Save variables to sessionStorage
   saveVariables() {
     try {
-      localStorage.setItem("nagini-variables", JSON.stringify(this.variables));
+      sessionStorage.setItem("nagini-variables", JSON.stringify(this.variables));
     } catch (error) {
-      console.error("Failed to save variables to localStorage:", error);
+      console.error("Failed to save variables to sessionStorage:", error);
     }
   }
 
@@ -2832,7 +2860,7 @@ class NaginiApp {
           console.error("Invalid JSON format:", importedData);
           this.showImportMessage(
             "error",
-            'Invalid JSON format. Expected an object with key-value pairs like:<br>{ "username": "john", "api_key": "abc123" }',
+            'Invalid JSON format. Expected an object with key-value pairs like:\n{ "username": "john", "api_key": "abc123" }',
           );
           return;
         }
@@ -2861,7 +2889,7 @@ class NaginiApp {
           }
         });
 
-        // Save to localStorage
+        // Save to sessionStorage
         this.saveVariables();
 
         // Update the UI
@@ -2877,12 +2905,12 @@ class NaginiApp {
         if (importedCount === 0) {
           this.showImportMessage(
             "error",
-            `No matching variables found. The JSON file contains variables that don't exist in your composition.<br><br>Expected variables: ${currentVariables.join(", ")}`,
+            `No matching variables found. The JSON file contains variables that don't exist in your composition.\n\nExpected variables: ${currentVariables.join(", ")}`,
           );
         } else {
           let message = `✓ Successfully imported ${importedCount} variable${importedCount !== 1 ? "s" : ""}!`;
           if (ignoredCount > 0) {
-            message += `<br><br>⚠ Ignored ${ignoredCount} unknown variable${ignoredCount !== 1 ? "s" : ""} not used in your composition.`;
+            message += `\n\n⚠ Ignored ${ignoredCount} unknown variable${ignoredCount !== 1 ? "s" : ""} not used in your composition.`;
           }
           this.showImportMessage("success", message);
         }
@@ -2890,7 +2918,7 @@ class NaginiApp {
         console.error("Failed to parse JSON:", error);
         this.showImportMessage(
           "error",
-          "Failed to parse JSON file. Please ensure it's a valid JSON file.<br><br>Error: " +
+          "Failed to parse JSON file. Please ensure it's a valid JSON file.\n\nError: " +
             error.message,
         );
       }
@@ -2918,7 +2946,9 @@ class NaginiApp {
       messageDiv.style.color = "#f44336";
     }
 
-    messageDiv.innerHTML = message;
+    // Message may contain file content (e.g. JSON parse errors); never render it as HTML
+    messageDiv.style.whiteSpace = "pre-line";
+    messageDiv.textContent = message;
     messageDiv.style.display = "block";
 
     // Auto-hide success messages after 5 seconds

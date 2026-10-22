@@ -21,10 +21,19 @@ func init() {
 	}
 }
 
+// sqliteDSN enables foreign key enforcement (ON DELETE CASCADE / SET NULL in the schema)
+func sqliteDSN(path string) string {
+	sep := "?"
+	if strings.Contains(path, "?") {
+		sep = "&"
+	}
+	return path + sep + "_foreign_keys=on"
+}
+
 // initDB initializes the database and creates tables if they don't exist
 func initDB() error {
 	var err error
-	db, err = sql.Open("sqlite3", dbPath)
+	db, err = sql.Open("sqlite3", sqliteDSN(dbPath))
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
@@ -140,15 +149,111 @@ func initDB() error {
 	_, err = db.Exec(`
 		ALTER TABLE blocks ADD COLUMN tags TEXT NOT NULL DEFAULT ''
 	`)
-	if err != nil {
-		// Ignore error if column already exists
-		if !strings.Contains(err.Error(), "duplicate column") {
-			// SQLite returns "duplicate column name" if it already exists
-			// Just log and continue
-		}
+	if err != nil && !strings.Contains(err.Error(), "duplicate column") {
+		return fmt.Errorf("failed to add tags column: %w", err)
+	}
+
+	if err := runMigrations(); err != nil {
+		return fmt.Errorf("failed to migrate database: %w", err)
 	}
 
 	return nil
+}
+
+// runMigrations applies versioned schema changes, tracked in PRAGMA user_version
+func runMigrations() error {
+	var version int
+	if err := db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
+		return err
+	}
+
+	migrations := []func() error{
+		// 1: session tokens are now stored hashed; old plaintext rows can never match
+		func() error {
+			_, err := db.Exec("DELETE FROM sessions")
+			return err
+		},
+		// 2: unique short_id column for published scripts
+		migrateScriptShortIDs,
+	}
+
+	for i := version; i < len(migrations); i++ {
+		if err := migrations[i](); err != nil {
+			return fmt.Errorf("migration %d: %w", i+1, err)
+		}
+		// PRAGMA does not accept bound parameters
+		if _, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d", i+1)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// migrateScriptShortIDs adds scripts.short_id and backfills it in creation order, so
+// the oldest script keeps the 8-character ID it was reachable under before
+func migrateScriptShortIDs() error {
+	if _, err := db.Exec("ALTER TABLE scripts ADD COLUMN short_id TEXT"); err != nil &&
+		!strings.Contains(err.Error(), "duplicate column") {
+		return err
+	}
+
+	rows, err := db.Query("SELECT id, checksum FROM scripts WHERE short_id IS NULL ORDER BY id")
+	if err != nil {
+		return err
+	}
+	type row struct {
+		id       int64
+		checksum string
+	}
+	var pending []row
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.id, &r.checksum); err != nil {
+			rows.Close()
+			return err
+		}
+		pending = append(pending, r)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	used := map[string]bool{}
+	existing, err := db.Query("SELECT short_id FROM scripts WHERE short_id IS NOT NULL")
+	if err != nil {
+		return err
+	}
+	for existing.Next() {
+		var id string
+		if err := existing.Scan(&id); err != nil {
+			existing.Close()
+			return err
+		}
+		used[id] = true
+	}
+	existing.Close()
+
+	for _, r := range pending {
+		shortID := ""
+		for n := minShortIDLength; n <= len(r.checksum); n += 4 {
+			candidate := r.checksum[len(r.checksum)-n:]
+			if !used[candidate] {
+				shortID = candidate
+				break
+			}
+		}
+		if shortID == "" {
+			return fmt.Errorf("no unique short id for script %d", r.id)
+		}
+		used[shortID] = true
+		if _, err := db.Exec("UPDATE scripts SET short_id = ? WHERE id = ?", shortID, r.id); err != nil {
+			return err
+		}
+	}
+
+	_, err = db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_scripts_short_id ON scripts(short_id)")
+	return err
 }
 
 // ============================================================================
@@ -593,17 +698,28 @@ func composeBlocks(blockIDs []string) (string, error) {
 // Script Operations (Published Compositions)
 // ============================================================================
 
-// createScript creates a new published script
-func createScript(base64Content, checksum, compositionID string) (int64, error) {
-	result, err := db.Exec(`
-		INSERT INTO scripts (base64_content, checksum, composition_id)
-		VALUES (?, ?, ?)
-	`, base64Content, checksum, compositionID)
-	if err != nil {
-		return 0, err
-	}
+// minShortIDLength is the default length of a script's short ID (hex characters)
+const minShortIDLength = 8
 
-	return result.LastInsertId()
+// createScript creates a new published script and returns its ID and short ID.
+// The short ID is the shortest checksum suffix (8, 12, ... chars) not used by another script.
+func createScript(base64Content, checksum string, compositionID sql.NullString) (int64, string, error) {
+	for n := minShortIDLength; n <= len(checksum); n += 4 {
+		shortID := checksum[len(checksum)-n:]
+		result, err := db.Exec(`
+			INSERT INTO scripts (base64_content, checksum, composition_id, short_id)
+			VALUES (?, ?, ?, ?)
+		`, base64Content, checksum, compositionID, shortID)
+		if err != nil {
+			if strings.Contains(err.Error(), "scripts.short_id") {
+				continue // suffix collision with another script; try a longer one
+			}
+			return 0, "", err
+		}
+		id, err := result.LastInsertId()
+		return id, shortID, err
+	}
+	return 0, "", fmt.Errorf("no unique short id available")
 }
 
 // getScriptByChecksum returns a script by its checksum
@@ -612,11 +728,12 @@ func getScriptByChecksum(checksum string) (*map[string]interface{}, error) {
 	var base64Content, scriptChecksum, compositionID sql.NullString
 	var createdAt, updatedAt string
 
+	var shortID sql.NullString
 	err := db.QueryRow(`
-		SELECT id, base64_content, checksum, composition_id, created_at, updated_at
+		SELECT id, base64_content, checksum, composition_id, short_id, created_at, updated_at
 		FROM scripts
 		WHERE checksum = ?
-	`, checksum).Scan(&id, &base64Content, &scriptChecksum, &compositionID, &createdAt, &updatedAt)
+	`, checksum).Scan(&id, &base64Content, &scriptChecksum, &compositionID, &shortID, &createdAt, &updatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("script not found")
@@ -629,6 +746,7 @@ func getScriptByChecksum(checksum string) (*map[string]interface{}, error) {
 		"id":             id,
 		"base64_content": base64Content.String,
 		"checksum":       scriptChecksum.String,
+		"short_id":       shortID.String,
 		"created_at":     createdAt,
 		"updated_at":     updatedAt,
 	}
@@ -640,17 +758,16 @@ func getScriptByChecksum(checksum string) (*map[string]interface{}, error) {
 	return &script, nil
 }
 
-// getScriptByShortID returns a script by the last 8 characters of its checksum
+// getScriptByShortID returns a script by its unique short ID
 func getScriptByShortID(shortID string) (*map[string]interface{}, error) {
 	var id int64
 	var base64Content, scriptChecksum, compositionID sql.NullString
 	var createdAt, updatedAt string
 
-	// Query for scripts where checksum ends with the short ID
 	err := db.QueryRow(`
 		SELECT id, base64_content, checksum, composition_id, created_at, updated_at
 		FROM scripts
-		WHERE substr(checksum, -8) = ?
+		WHERE short_id = ?
 	`, shortID).Scan(&id, &base64Content, &scriptChecksum, &compositionID, &createdAt, &updatedAt)
 
 	if err == sql.ErrNoRows {
@@ -678,6 +795,16 @@ func getScriptByShortID(shortID string) (*map[string]interface{}, error) {
 // ============================================================================
 // Helper Functions
 // ============================================================================
+
+// compositionExists reports whether a composition with the given ID exists
+func compositionExists(compositionID string) (bool, error) {
+	var exists int
+	err := db.QueryRow("SELECT 1 FROM compositions WHERE id = ?", compositionID).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	return err == nil, err
+}
 
 // getBlockCount returns the total number of blocks
 func getBlockCount() (int, error) {
